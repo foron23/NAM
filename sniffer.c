@@ -48,20 +48,24 @@ pcap_t* open_pcap_socket(char* device, const char* bpfstr)
 {
     char errbuf[PCAP_ERRBUF_SIZE];
     pcap_t* pd;
+//    pcap_if_t* interface_list;
     uint32_t  srcip, netmask;
     struct bpf_program  bpf;
 
     //pcap_if_t *interface_list;
     //result = pcap_findalldevs(&interface_list,errbuf);
 
+// Deberia funcionar con esta funcion, pero da segmentation fault
+    //pcap_findalldevs(&interface_list, errbuf);
 
     // If no network interface (device) is specfied, get the first one.
     if (!*device && !(device = pcap_lookupdev(errbuf)))
+    //if (!*device && !(device = interface_list->name))
     {
         printf("pcap_lookupdev(): %s\n", errbuf);
         return NULL;
     }
-
+    //printf("%s\n",device );
     // Open the device for live capture, as opposed to reading a packet
     // capture file.
     if ((pd = pcap_open_live(device, BUFSIZ, 1, 0, errbuf)) == NULL)
@@ -162,6 +166,7 @@ typedef struct flow
   sample_data data;
 } flow;
 
+
 // Estructura datos buffer circular, aunque es probable que solo use tail, para los push
 typedef struct CircBuf
 {
@@ -192,23 +197,31 @@ int CircBuf_Print(CircBuf buf)
 }
 int CircBuf_push(CircBuf buf, flow newFlow, directional_info extra_info)
 {
-  int last_index= buf.tail++;
-  buf.connections[last_index] = newFlow;
-  buf.connections[last_index].data.src_numPackets = 1;
-  buf.connections[last_index].data.src_totalBytes = extra_info.byteCount;
-  buf.connections[last_index].data.sttl = extra_info.ttl;
+  //int last_index= buf.tail++;
+  newFlow.data.src_numPackets = 1;
+  newFlow.data.src_totalBytes = extra_info.byteCount;
+  newFlow.data.sttl = extra_info.ttl;
   //load se deberia calcular al final con totalBytes y alguna variable de tiempo
-  buf.connections[last_index].data.tcp_window = newFlow.data.tcp_window;
+  newFlow.data.tcp_window = newFlow.data.tcp_window;
   //inter arrival sera la variable de tiempo / numpackets
   //mean es totalbytes / numpackets
-
+  buf.connections[buf.tail++] = newFlow;
     if (buf.tail == buf.size)
     {
       buf.tail = 0;
     }
     return buf.tail;
 }
-
+flow Circbuf_pop(CircBuf buf)
+{
+  flow thisFlow;
+  thisFlow = buf.connections[buf.head++];
+  if (buf.head == buf.size)
+  {
+    buf.head = 0;
+  }
+  return thisFlow;
+}
 
 int isReversed(flow thisFlow, flow newFlow)
 {
@@ -276,6 +289,28 @@ int fetch_flow(CircBuf buf, flow thisFlow )
 
 //No hay indice 404, se devuelve como un codigo de error.
   return FLOW_NOT_FOUND;
+}
+
+//Introduciendo un flow devuelve el flow con la informacion de los calculos completa
+flow Calculate_Features(CircBuf buf, flow thisFlow)
+{
+    int i=0;
+    int same_src_and_dst_ip = 0;
+    int same_src_ip_and_dst_pt = 0;
+    flow bufElement;
+
+    for(i=0; i< buf.size; i++)
+    {
+      bufElement = buf.connections[i];
+      if(bufElement.f_srcip == thisFlow.f_srcip && bufElement.f_dstip == thisFlow.f_dstip)
+        same_src_and_dst_ip++;
+      if(bufElement.f_srcip == thisFlow.f_srcip &&  bufElement.f_dstPort == thisFlow.f_dstPort)
+        same_src_ip_and_dst_pt++;
+    }
+    thisFlow.data.same_src_and_dst_ip_ct = same_src_and_dst_ip;
+    thisFlow.data.same_src_ip_and_dst_pt_ct = same_src_ip_and_dst_pt;
+
+    return thisFlow;
 }
 
 // update de la inf del flow en sentido src->dst
@@ -381,12 +416,12 @@ void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetp
   case IPPROTO_ICMP:
       icmphdr = (struct icmphdr*)packetptr;
       thisFlow.protocol = "ICMP";
-      printf("ICMP %s -> %s\n", srcip, dstip);
-      printf("%s\n", iphdrInfo);
-      memcpy(&id, (u_char*)icmphdr+4, 2);
-      memcpy(&seq, (u_char*)icmphdr+6, 2);
-      printf("Type:%d Code:%d ID:%d Seq:%d\n", icmphdr->type, icmphdr->code,
-             ntohs(id), ntohs(seq));
+      //printf("ICMP %s -> %s\n", srcip, dstip);
+      //printf("%s\n", iphdrInfo);
+      //memcpy(&id, (u_char*)icmphdr+4, 2);
+      //memcpy(&seq, (u_char*)icmphdr+6, 2);
+      //printf("Type:%d Code:%d ID:%d Seq:%d\n", icmphdr->type, icmphdr->code,
+      //       ntohs(id), ntohs(seq));
       break;
   }
 
@@ -411,6 +446,8 @@ void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetp
   }
   printf("Flow %s:%d -> %s:%d, proto: %s \n",thisFlow.f_srcip,thisFlow.f_srcPort,thisFlow.f_dstip,thisFlow.f_dstPort, thisFlow.protocol);
   //CircBuf_Print(buffer_circ);
+
+
 }
 
 
@@ -469,11 +506,12 @@ int main(int argc, char **argv)
         signal(SIGINT, bailout);
         signal(SIGTERM, bailout);
         signal(SIGQUIT, bailout);
+        //pcap_set_timeout(pd, 500);
         capture_loop(pd, packets, (pcap_handler)myPacketParser);
 
       //dumpear el buffer, a ver que contiene.
-        CircBuf_Print(buffer_circ);
-        bailout(0);
+      CircBuf_Print(buffer_circ);
+      bailout(0);
     }
     exit(0);
 }
