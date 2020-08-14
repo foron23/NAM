@@ -314,7 +314,7 @@ flow Calculate_Features(CircBuf buf, flow thisFlow)
 }
 
 // update de la inf del flow en sentido src->dst
-int updateFlow_src(CircBuf buf, flow newFlow, directional_info extra_info ,int index)
+void updateFlow_src(CircBuf buf, flow newFlow, directional_info extra_info ,int index)
 {
    flow ThisFlow = buf.connections[index];
    ThisFlow.data.src_numPackets++;
@@ -324,10 +324,11 @@ int updateFlow_src(CircBuf buf, flow newFlow, directional_info extra_info ,int i
    ThisFlow.data.tcp_window += newFlow.data.tcp_window;
    //inter arrival sera la variable de tiempo / numpackets
    //mean es totalbytes / numpackets
+   buf.connections[index]= ThisFlow;
 
 }
 // update de la inf del flow en sentido dst->src
-int updateFlow_dst(CircBuf buf, flow newFlow,directional_info extra_info, int index)
+void updateFlow_dst(CircBuf buf, flow newFlow,directional_info extra_info, int index)
 {
   flow ThisFlow = buf.connections[index];
   ThisFlow.data.dst_numPackets++;
@@ -338,6 +339,7 @@ int updateFlow_dst(CircBuf buf, flow newFlow,directional_info extra_info, int in
   //inter arrival sera la variable de tiempo / numpackets
   //mean es totalbytes / numpackets
   //http resp size?
+  buf.connections[index]= ThisFlow;
 }
 
 //Mi variante del handler para los paquetes PCAP, basado en el original, pero este usa las estructura de datos flow, el buffer circular y directional info.
@@ -371,7 +373,7 @@ void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetp
   short int tcp_win, ind;
 
 
-
+  id = -1;
   // Skip the datalink layer header and get the IP header fields.
   packetptr += linkhdrlen;
   iphdr = (struct ip*)packetptr;
@@ -431,7 +433,7 @@ void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetp
   //Hay que crear un nuevo flow en el buffer
   if(ind==FLOW_NOT_FOUND)
   {
-      CircBuf_push(buffer_circ, thisFlow, extra_info);
+     id =  CircBuf_push(buffer_circ, thisFlow, extra_info);
   }
   else  //Ya existe el flow, donde hay que meter la informacion nueva?
   {
@@ -444,7 +446,8 @@ void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetp
       updateFlow_src(buffer_circ, thisFlow,  extra_info ,ind);
     }
   }
-  printf("Flow %s:%d -> %s:%d, proto: %s \n",thisFlow.f_srcip,thisFlow.f_srcPort,thisFlow.f_dstip,thisFlow.f_dstPort, thisFlow.protocol);
+  printf("buf pos %d, code %d\n", id, ind );
+  //printf("Flow %s:%d -> %s:%d, proto: %s \n",thisFlow.f_srcip,thisFlow.f_srcPort,thisFlow.f_dstip,thisFlow.f_dstPort, thisFlow.protocol);
   //CircBuf_Print(buffer_circ);
 
 
@@ -510,8 +513,8 @@ int main(int argc, char **argv)
         capture_loop(pd, packets, (pcap_handler)myPacketParser);
 
       //dumpear el buffer, a ver que contiene.
-      CircBuf_Print(buffer_circ);
-      bailout(0);
+      //CircBuf_Print(buffer_circ);
+        bailout(0);
     }
     exit(0);
 }
