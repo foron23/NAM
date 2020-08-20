@@ -176,17 +176,20 @@ typedef struct CircBuf
   flow connections[CIRCBUFSIZE];
 } CircBuf;
 
+CircBuf buf;
 // Inicializacion de buffer circular
-void CircBuf_Init(CircBuf buf)
+//void CircBuf_Init(CircBuf buf)
+void CircBuf_Init()
 {
   buf.head = 0;
   buf.tail = 0;
   buf.size = CIRCBUFSIZE;
 }
-int CircBuf_Print(CircBuf buf)
+//int CircBuf_Print(CircBuf buf)
+int CircBuf_Print()
 {
-    int i=0;
-    for(i=0; i< buf.size; i++)
+
+    for(int i=0; i< buf.size; i++)
     {
         printf("i=%d, Flow %s:%d -> %s:%d , proto: %s \n"
         ,i, buf.connections[i].f_srcip,buf.connections[i].f_srcPort ,buf.connections[i].f_dstip
@@ -195,7 +198,7 @@ int CircBuf_Print(CircBuf buf)
     printf("\n");
     return(0);
 }
-int CircBuf_push(CircBuf buf, flow newFlow, directional_info extra_info)
+int CircBuf_push(flow newFlow, directional_info extra_info)
 {
   //int last_index= buf.tail++;
   newFlow.data.src_numPackets = 1;
@@ -212,7 +215,8 @@ int CircBuf_push(CircBuf buf, flow newFlow, directional_info extra_info)
     }
     return buf.tail;
 }
-flow Circbuf_pop(CircBuf buf)
+//flow Circbuf_pop(CircBuf buf)
+flow Circbuf_pop()
 {
   flow thisFlow;
   thisFlow = buf.connections[buf.head++];
@@ -246,26 +250,26 @@ int isReversed(flow thisFlow, flow newFlow)
 //OUT: 2 output previstos:
 //    - Indice del elemento que tiene las mismas caracteristicas o las mismas pero en sentido inverso.
 //    - Codigo de error 404, un numero que esta out of bounds de [-100, 100] (No me convence esta solucion, pero de momento se quedara asi)
-int fetch_flow(CircBuf buf, flow thisFlow )
+int fetch_flow(flow thisFlow )
 {
   int i = 0;
   flow bufElement;
-  int found = 0;
 
-  while (i < buf.size && !found){
+  for(i=0; i< buf.size; i++)
+  {
     bufElement = buf.connections[i];
     //buscamos un flow con las mismas caracteristicas ip, puertos y protocolo
     if((bufElement.f_srcip == thisFlow.f_srcip && bufElement.f_dstip == thisFlow.f_dstip &&
     bufElement.f_srcPort == thisFlow.f_srcPort && bufElement.f_dstPort == thisFlow.f_dstPort &&
-    bufElement.protocol == thisFlow.protocol)
-    ||
-    (bufElement.f_srcip == thisFlow.f_dstip && bufElement.f_dstip == thisFlow.f_srcip &&
-    bufElement.f_srcPort == thisFlow.f_dstPort && bufElement.f_dstPort == thisFlow.f_srcPort &&
     bufElement.protocol == thisFlow.protocol))
+//    ||
+//    (bufElement.f_srcip == thisFlow.f_dstip && bufElement.f_dstip == thisFlow.f_srcip &&
+//    bufElement.f_srcPort == thisFlow.f_dstPort && bufElement.f_dstPort == thisFlow.f_srcPort &&
+//    bufElement.protocol == thisFlow.protocol))
       {
         //Como controlo que un flow esta finalizado o no?
         //Si no se controla podria darse que solo se encuentre la primera ocurrencia
-        found = 1;
+        //found = 1;
 
       //Devuelvo el indice del elemento que contiene el flow.
         return i;
@@ -292,9 +296,9 @@ int fetch_flow(CircBuf buf, flow thisFlow )
 }
 
 //Introduciendo un flow devuelve el flow con la informacion de los calculos completa
-flow Calculate_Features(CircBuf buf, flow thisFlow)
+flow Calculate_Features(flow thisFlow)
 {
-    int i=0;
+    int i;
     int same_src_and_dst_ip = 0;
     int same_src_ip_and_dst_pt = 0;
     flow bufElement;
@@ -314,7 +318,7 @@ flow Calculate_Features(CircBuf buf, flow thisFlow)
 }
 
 // update de la inf del flow en sentido src->dst
-void updateFlow_src(CircBuf buf, flow newFlow, directional_info extra_info ,int index)
+void updateFlow_src(flow newFlow, directional_info extra_info ,int index)
 {
    flow ThisFlow = buf.connections[index];
    ThisFlow.data.src_numPackets++;
@@ -328,7 +332,7 @@ void updateFlow_src(CircBuf buf, flow newFlow, directional_info extra_info ,int 
 
 }
 // update de la inf del flow en sentido dst->src
-void updateFlow_dst(CircBuf buf, flow newFlow,directional_info extra_info, int index)
+void updateFlow_dst( flow newFlow,directional_info extra_info, int index)
 {
   flow ThisFlow = buf.connections[index];
   ThisFlow.data.dst_numPackets++;
@@ -358,12 +362,13 @@ void updateFlow_dst(CircBuf buf, flow newFlow,directional_info extra_info, int i
 //  -resolver las features de tiempo
 //  -crear algun control para el volcado de paquetes, ya sea por tiempo o por cantidad de paquetes.
 //  -La integracion con el programa python y tal
-void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetptr, CircBuf buffer_circ)
+void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetptr)
 {
   struct ip* iphdr;
   struct icmphdr* icmphdr;
   struct tcphdr* tcphdr;
   struct udphdr* udphdr;
+
   flow thisFlow;
   directional_info extra_info;
 
@@ -372,7 +377,7 @@ void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetp
   int srcPort, dstPort, byteCount;
   short int tcp_win, ind;
 
-
+  //printf("im in\n");
   id = -1;
   // Skip the datalink layer header and get the IP header fields.
   packetptr += linkhdrlen;
@@ -396,6 +401,7 @@ void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetp
       thisFlow.f_dstPort = ntohs(tcphdr->dest);
       thisFlow.protocol = "TCP";
       thisFlow.data.tcp_window = ntohs(tcphdr->window);
+      //printf("im a tcp packet\n");
 
 // Necesitare esta info para algunos parametros extra de TCP, podria servir para dar por finalizados los flows de este protocolo,
 /*
@@ -413,11 +419,15 @@ void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetp
       thisFlow.f_srcPort = ntohs(udphdr->source);
       thisFlow.f_dstPort = ntohs(udphdr->dest);
       thisFlow.protocol = "UDP";
+      //printf("im an udp packet\n");
+
       break;
 
   case IPPROTO_ICMP:
       icmphdr = (struct icmphdr*)packetptr;
       thisFlow.protocol = "ICMP";
+      //printf("im an icmp packet\n");
+
       //printf("ICMP %s -> %s\n", srcip, dstip);
       //printf("%s\n", iphdrInfo);
       //memcpy(&id, (u_char*)icmphdr+4, 2);
@@ -426,29 +436,31 @@ void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetp
       //       ntohs(id), ntohs(seq));
       break;
   }
+  //printf("fetching...\n");
 
   //Tenemos toda la informacion necesaria para mirar los flows.
-  ind = fetch_flow(buffer_circ, thisFlow);
+  ind = fetch_flow( thisFlow);
+  //printf("fetched %d\n", ind);
 
   //Hay que crear un nuevo flow en el buffer
   if(ind==FLOW_NOT_FOUND)
   {
-     id =  CircBuf_push(buffer_circ, thisFlow, extra_info);
+     id =  CircBuf_push(thisFlow, extra_info);
   }
   else  //Ya existe el flow, donde hay que meter la informacion nueva?
   {
-    if(isReversed(buffer_circ.connections[ind], thisFlow))
+    if(isReversed(buf.connections[ind], thisFlow))
     {
-      updateFlow_dst(buffer_circ, thisFlow,  extra_info ,ind);
+      updateFlow_dst( thisFlow,  extra_info ,ind);
     }
     else
     {
-      updateFlow_src(buffer_circ, thisFlow,  extra_info ,ind);
+      updateFlow_src( thisFlow,  extra_info ,ind);
     }
   }
   printf("buf pos %d, code %d\n", id, ind );
-  //printf("Flow %s:%d -> %s:%d, proto: %s \n",thisFlow.f_srcip,thisFlow.f_srcPort,thisFlow.f_dstip,thisFlow.f_dstPort, thisFlow.protocol);
-  //CircBuf_Print(buffer_circ);
+  //fflush(stdout);
+  printf("Flow %s:%d -> %s:%d, proto: %s \n",thisFlow.f_srcip,thisFlow.f_srcPort,thisFlow.f_dstip,thisFlow.f_dstPort, thisFlow.protocol);
 
 
 }
@@ -464,6 +476,8 @@ void bailout(int signo)
         printf("%d packets received\n", stats.ps_recv);
         printf("%d packets dropped\n\n", stats.ps_drop);
     }
+    pcap_breakloop(pd);
+    CircBuf_Print(buf);
     pcap_close(pd);
     exit(0);
 }
@@ -497,9 +511,9 @@ int main(int argc, char **argv)
         strcat(bpfstr, argv[i]);
         strcat(bpfstr, " ");
     }
-    CircBuf buffer_circ;
+
     printf("Starting buffer...\n" );
-    CircBuf_Init(buffer_circ);
+    CircBuf_Init(buf);
     printf("Buffer initialized.\n" );
 
     // Open libpcap, set the program termination signals then start
@@ -509,11 +523,12 @@ int main(int argc, char **argv)
         signal(SIGINT, bailout);
         signal(SIGTERM, bailout);
         signal(SIGQUIT, bailout);
+        //alarm(60);
+        //signal(SIGALRM,bailout);
         //pcap_set_timeout(pd, 500);
         capture_loop(pd, packets, (pcap_handler)myPacketParser);
 
       //dumpear el buffer, a ver que contiene.
-      //CircBuf_Print(buffer_circ);
         bailout(0);
     }
     exit(0);
