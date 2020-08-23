@@ -34,6 +34,8 @@
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
 #include <netinet/ip_icmp.h>
+#include <time.h>
+
 
 #define FLOW_NOT_FOUND 404
 #define CIRCBUFSIZE 100
@@ -140,7 +142,6 @@ typedef struct directional_info
 {
   int byteCount;
   int ttl;
-  float time; //Como represento el tiempo??
 }directional_info;
 
 typedef struct sample_data
@@ -150,8 +151,12 @@ typedef struct sample_data
   int sttl, dttl;
   float s_load, d_load;
   int s_loss;
-  int tcp_window;
-  float s_inpkt;
+  int tcp_window; //source
+  double s_inpkt;
+  double total_arrival_time;
+  struct timespec first_tmp;
+  struct timespec current_tmp_src;
+  struct timespec current_tmp;  //para el calculo final de tiempo
   float s_mean, d_mean;
   int http_resp_size;
   int same_src_and_dst_ip_ct;
@@ -162,7 +167,7 @@ typedef struct flow
 {
   char f_srcip[256],f_dstip[256];
   unsigned int f_srcPort, f_dstPort;
-  char* protocol;
+  char* protocol;// tengo que cambiarlo por un mapeo de int (enum)
   sample_data data;
 } flow;
 
@@ -176,7 +181,10 @@ typedef struct CircBuf
   flow connections[CIRCBUFSIZE];
 } CircBuf;
 
+
+//Main buffer declaration (Global)
 CircBuf buf;
+
 // Inicializacion de buffer circular
 //void CircBuf_Init(CircBuf buf)
 void CircBuf_Init()
@@ -194,20 +202,27 @@ int CircBuf_Print()
         printf("i=%d, Flow %s:%d -> %s:%d , proto: %s \n"
         ,i, buf.connections[i].f_srcip,buf.connections[i].f_srcPort ,buf.connections[i].f_dstip
         , buf.connections[i].f_dstPort, buf.connections[i].protocol);
+        send_Sample(buf.connections[i]);
     }
     printf("\n");
     return(0);
 }
-int CircBuf_push(flow newFlow, directional_info extra_info)
+int CircBuf_push(flow newFlow, directional_info extra_info, struct timespec time)
 {
-  //int last_index= buf.tail++;
   newFlow.data.src_numPackets = 1;
+  newFlow.data.dst_numPackets = 0;
   newFlow.data.src_totalBytes = extra_info.byteCount;
+  newFlow.data.dst_totalBytes = 0;
   newFlow.data.sttl = extra_info.ttl;
-  //load se deberia calcular al final con totalBytes y alguna variable de tiempo
-  newFlow.data.tcp_window = newFlow.data.tcp_window;
-  //inter arrival sera la variable de tiempo / numpackets
-  //mean es totalbytes / numpackets
+  newFlow.data.dttl = 0;
+  newFlow.data.s_inpkt = 0.0;
+  newFlow.data.total_arrival_time = 0.0;
+  newFlow.data.first_tmp = time;
+  newFlow.data.current_tmp = time;
+  newFlow.data.current_tmp_src = time;
+  newFlow.data.s_loss = 0; // en un principio no se ha perdido nada
+  //newFlow.data.http_resp_size = 0; //este solo deberia llenarse en caso de que llegue un paquete desde un puerto 80 o 443
+
   buf.connections[buf.tail++] = newFlow;
     if (buf.tail == buf.size)
     {
@@ -261,38 +276,36 @@ int fetch_flow(flow thisFlow )
     //buscamos un flow con las mismas caracteristicas ip, puertos y protocolo
     if((bufElement.f_srcip == thisFlow.f_srcip && bufElement.f_dstip == thisFlow.f_dstip &&
     bufElement.f_srcPort == thisFlow.f_srcPort && bufElement.f_dstPort == thisFlow.f_dstPort &&
+    bufElement.protocol == thisFlow.protocol)
+    ||
+    (bufElement.f_srcip == thisFlow.f_dstip && bufElement.f_dstip == thisFlow.f_srcip &&
+    bufElement.f_srcPort == thisFlow.f_dstPort && bufElement.f_dstPort == thisFlow.f_srcPort &&
     bufElement.protocol == thisFlow.protocol))
-//    ||
-//    (bufElement.f_srcip == thisFlow.f_dstip && bufElement.f_dstip == thisFlow.f_srcip &&
-//    bufElement.f_srcPort == thisFlow.f_dstPort && bufElement.f_dstPort == thisFlow.f_srcPort &&
-//    bufElement.protocol == thisFlow.protocol))
       {
         //Como controlo que un flow esta finalizado o no?
-        //Si no se controla podria darse que solo se encuentre la primera ocurrencia
-        //found = 1;
 
       //Devuelvo el indice del elemento que contiene el flow.
         return i;
       }
 
-//Relaciones bidireccionales?
-//Si el flow es lo mismo pero en sentido contrario el conteo tambien deberia ejecutarse para sumar en las variables de tipo dst.
-/*
-      if(bufElement.f_srcip == thisFlow.f_dstip && bufElement.f_dstip == thisFlow.f_srcip &&
-      bufElement.f_srcPort == thisFlow.f_dstPort && bufElement.f_dstPort == thisFlow.f_srcPort &&
-      bufElement.protocol == thisFlow.protocol)
-      {
-      found = 1;
-
-    //Devuelvo el indice del elemento que contiene el flow, pero es negativo, asi se sabe que es en sentido contrario.
-      return i;
-      }
-*/
-
   }
 
 //No hay indice 404, se devuelve como un codigo de error.
   return FLOW_NOT_FOUND;
+}
+
+
+double calculate_time(struct timespec t1, struct timespec t2)
+{
+  long seconds = t2.tv_sec - t1.tv_sec;
+  long ns = t2.tv_nsec - t1.tv_nsec;
+
+  if (t1.tv_nsec > t2.tv_nsec)  // clock underflow
+  {
+     --seconds;
+     ns += 1000000000;
+   }
+ return (double)seconds + (double)ns/(double)1000000000;
 }
 
 //Introduciendo un flow devuelve el flow con la informacion de los calculos completa
@@ -302,6 +315,7 @@ flow Calculate_Features(flow thisFlow)
     int same_src_and_dst_ip = 0;
     int same_src_ip_and_dst_pt = 0;
     flow bufElement;
+    double total_time;
 
     for(i=0; i< buf.size; i++)
     {
@@ -311,40 +325,85 @@ flow Calculate_Features(flow thisFlow)
       if(bufElement.f_srcip == thisFlow.f_srcip &&  bufElement.f_dstPort == thisFlow.f_dstPort)
         same_src_ip_and_dst_pt++;
     }
+    total_time = calculate_time(thisFlow.data.first_tmp, thisFlow.data.current_tmp);
+    //total_time = 1.0;
+    thisFlow.data.s_inpkt = thisFlow.data.total_arrival_time/thisFlow.data.src_numPackets;
+    thisFlow.data.s_mean = (float)thisFlow.data.src_totalBytes/(float)thisFlow.data.src_numPackets;
+    thisFlow.data.d_mean = (float)thisFlow.data.dst_totalBytes/(float)thisFlow.data.dst_numPackets;
+    thisFlow.data.s_load = (float)thisFlow.data.src_totalBytes/total_time;
+    thisFlow.data.d_load = (float)thisFlow.data.dst_totalBytes/total_time;
     thisFlow.data.same_src_and_dst_ip_ct = same_src_and_dst_ip;
     thisFlow.data.same_src_ip_and_dst_pt_ct = same_src_ip_and_dst_pt;
+
 
     return thisFlow;
 }
 
-// update de la inf del flow en sentido src->dst
-void updateFlow_src(flow newFlow, directional_info extra_info ,int index)
+/*
+•  Destination packet count.
+•  Source bytes.
+•  Source TTL.
+•  Destination TTL.
+•  Source load.
+•  Destination Load.
+•  Source loss.
+•  Source inter-arrival packet time.
+•  Source TCP window advertisement.
+•  Mean flow packet size transmitted by source.
+•  Mean flow packet size transmitted by destination.
+•  The content size of the data transferred from a HTTP service.
+•  Number of connections with the same source address and destination port in 100 connections according to the last time.
+•  Number of connections with the same source address and destination address in 100 connections according to the last time.
+*/
+
+void send_Sample(flow sample)
 {
+  //Abrir socket udp con el programa ML
+
+  //De momento printeo de las features del flows
+
+  printf("%d,%d,%d,%d,%f,%f,%d,%f,%d,%f,%f,%d,%d,%d\n",
+    sample.data.dst_numPackets, sample.data.src_totalBytes, sample.data.sttl, sample.data.dttl,
+    sample.data.s_load, sample.data.d_load, sample.data.s_loss, sample.data.s_inpkt,
+    sample.data.tcp_window, sample.data.s_mean, sample.data.d_mean, sample.data.http_resp_size,
+    sample.data.same_src_and_dst_ip_ct, sample.data.same_src_ip_and_dst_pt_ct);
+
+}
+
+// update de la inf del flow en sentido src->dst
+void updateFlow_src(flow newFlow, directional_info extra_info ,int index, struct timespec time)
+{
+  double elapsed;
+
    flow ThisFlow = buf.connections[index];
    ThisFlow.data.src_numPackets++;
    ThisFlow.data.src_totalBytes += extra_info.byteCount;
    ThisFlow.data.sttl += extra_info.ttl;
    //load se deberia calcular al final con totalBytes y alguna variable de tiempo
    ThisFlow.data.tcp_window += newFlow.data.tcp_window;
+   elapsed = calculate_time(ThisFlow.data.current_tmp_src, time);
+   ThisFlow.data.total_arrival_time += elapsed;
+   ThisFlow.data.current_tmp = time;
+   ThisFlow.data.current_tmp_src = time;
    //inter arrival sera la variable de tiempo / numpackets
    //mean es totalbytes / numpackets
    buf.connections[index]= ThisFlow;
 
 }
 // update de la inf del flow en sentido dst->src
-void updateFlow_dst( flow newFlow,directional_info extra_info, int index)
+void updateFlow_dst( flow newFlow,directional_info extra_info, int index, struct timespec time)
 {
+
   flow ThisFlow = buf.connections[index];
   ThisFlow.data.dst_numPackets++;
   ThisFlow.data.dst_totalBytes += extra_info.byteCount;
   ThisFlow.data.dttl += extra_info.ttl;
-  //load se deberia calcular al final con totalBytes y alguna variable de tiempo
-  ThisFlow.data.tcp_window += newFlow.data.tcp_window;
-  //inter arrival sera la variable de tiempo / numpackets
-  //mean es totalbytes / numpackets
-  //http resp size?
+  ThisFlow.data.current_tmp = time;
+
   buf.connections[index]= ThisFlow;
 }
+
+
 
 //Mi variante del handler para los paquetes PCAP, basado en el original, pero este usa las estructura de datos flow, el buffer circular y directional info.
 // Los protocolos de transporte TCP y UDP estan cubiertos, sin embargo, faltaria definir alguna otra estructura para extraer el puerto de cabeceras desconocidas, seguramente.
@@ -369,8 +428,11 @@ void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetp
   struct tcphdr* tcphdr;
   struct udphdr* udphdr;
 
+
   flow thisFlow;
   directional_info extra_info;
+  struct timespec timestamp;
+  double medition;
 
   char iphdrInfo[256], srcip[256], dstip[256];
   unsigned short id, seq;
@@ -380,6 +442,9 @@ void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetp
   //printf("im in\n");
   id = -1;
   // Skip the datalink layer header and get the IP header fields.
+  //Hay paquetes
+  clock_gettime(CLOCK_REALTIME,&timestamp);
+  //printf("this timestamp, sec: %ld, nsec: %ld \n",timestamp.tv_sec, timestamp.tv_nsec );
   packetptr += linkhdrlen;
   iphdr = (struct ip*)packetptr;
 
@@ -388,7 +453,8 @@ void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetp
 
   extra_info.byteCount = ntohs(iphdr->ip_len);
   extra_info.ttl = ntohs(iphdr->ip_ttl);
-  //extra_info.time = nose de donde sacarlo
+
+//Como se si piedo paquetes????
 
   // Advance to the transport layer header then parse and display
   // the fields based on the type of hearder: tcp, udp or icmp.
@@ -402,6 +468,14 @@ void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetp
       thisFlow.protocol = "TCP";
       thisFlow.data.tcp_window = ntohs(tcphdr->window);
       //printf("im a tcp packet\n");
+      if(thisFlow.f_srcPort == 80 || thisFlow.f_srcPort == 443) // damos por hecho que el contenido http interesante se manda desde el servidor, por lo tanto puerto src
+      {
+        packetptr += 4*tcphdr->doff; // Esto en teoria apunta al payload
+        //thisFlow.data.http_resp_size = ?;
+        //sacar el numero de bytes de la respuesta de las cabeceras http
+        ///////// Posible idea: https://stackoverflow.com/questions/22077802/simple-c-example-of-doing-an-http-post-and-consuming-the-response
+      }
+
 
 // Necesitare esta info para algunos parametros extra de TCP, podria servir para dar por finalizados los flows de este protocolo,
 /*
@@ -445,23 +519,23 @@ void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetp
   //Hay que crear un nuevo flow en el buffer
   if(ind==FLOW_NOT_FOUND)
   {
-     id =  CircBuf_push(thisFlow, extra_info);
+     id =  CircBuf_push(thisFlow, extra_info, timestamp);
   }
   else  //Ya existe el flow, donde hay que meter la informacion nueva?
   {
     if(isReversed(buf.connections[ind], thisFlow))
     {
-      updateFlow_dst( thisFlow,  extra_info ,ind);
+      updateFlow_dst( thisFlow,  extra_info ,ind, timestamp);
     }
     else
     {
-      updateFlow_src( thisFlow,  extra_info ,ind);
+      updateFlow_src( thisFlow,  extra_info ,ind, timestamp);
     }
   }
-  printf("buf pos %d, code %d\n", id, ind );
+  if(ind != FLOW_NOT_FOUND)
+    printf("buf pos %d, code %d\n", id, ind );
   //fflush(stdout);
-  printf("Flow %s:%d -> %s:%d, proto: %s \n",thisFlow.f_srcip,thisFlow.f_srcPort,thisFlow.f_dstip,thisFlow.f_dstPort, thisFlow.protocol);
-
+  //printf("Flow %s:%d -> %s:%d, proto: %s \n",thisFlow.f_srcip,thisFlow.f_srcPort,thisFlow.f_dstip,thisFlow.f_dstPort, thisFlow.protocol);
 
 }
 
@@ -478,6 +552,7 @@ void bailout(int signo)
     }
     pcap_breakloop(pd);
     CircBuf_Print(buf);
+    //send_Sample(buf.connections[0]);
     pcap_close(pd);
     exit(0);
 }
