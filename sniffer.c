@@ -36,9 +36,10 @@
 #include <netinet/ip_icmp.h>
 #include <time.h>
 
-
+#define MAXLEN 4096
 #define FLOW_NOT_FOUND 404
 #define CIRCBUFSIZE 100
+
 
 
 
@@ -328,10 +329,19 @@ flow Calculate_Features(flow thisFlow)
     }
     total_time = calculate_time(thisFlow.data.first_tmp, thisFlow.data.current_tmp);
     //printf("total time %f, sinpkt %f\n", total_time,thisFlow.data.total_arrival_time);
-    //total_time = 1.0;
+
+    //avoid inf values
+    if(total_time==0.0)
+      total_time = 1.0;
+
     thisFlow.data.s_inpkt = thisFlow.data.total_arrival_time/thisFlow.data.src_numPackets;
     thisFlow.data.s_mean = (float)thisFlow.data.src_totalBytes/(float)thisFlow.data.src_numPackets;
     thisFlow.data.d_mean = (float)thisFlow.data.dst_totalBytes/(float)thisFlow.data.dst_numPackets;
+
+    //avoid nan values
+    if(thisFlow.data.dst_numPackets == 0)
+      thisFlow.data.d_mean = 0.0;
+
     thisFlow.data.s_load = (float)thisFlow.data.src_totalBytes/total_time;
     thisFlow.data.d_load = (float)thisFlow.data.dst_totalBytes/total_time;
     thisFlow.data.same_src_and_dst_ip_ct = same_src_and_dst_ip;
@@ -357,19 +367,44 @@ flow Calculate_Features(flow thisFlow)
 •  Number of connections with the same source address and destination port in 100 connections according to the last time.
 •  Number of connections with the same source address and destination address in 100 connections according to the last time.
 */
-
-void send_Sample(flow sample)
+typedef struct Sample
 {
-  //Abrir socket udp con el programa ML
 
-  //De momento printeo de las features del flows
+  signed int src_numPackets, dst_numPackets;
+  signed int src_totalBytes;
+  signed int sttl, dttl;
+  float s_load, d_load;
+  signed int s_loss;
+  float s_inpkt;
+  signed int tcp_window; //source
+  float s_mean, d_mean;
+  signed int http_resp_size;
+  signed int same_src_and_dst_ip_ct;
+  signed int same_src_ip_and_dst_pt_ct;
+} Sample;
 
-  printf("%d,%d,%d,%d,%f,%f,%d,%f,%d,%f,%f,%d,%d,%d\n",
-    sample.data.dst_numPackets, sample.data.src_totalBytes, sample.data.sttl, sample.data.dttl,
-    sample.data.s_load, sample.data.d_load, sample.data.s_loss, sample.data.s_inpkt,
-    sample.data.tcp_window, sample.data.s_mean, sample.data.d_mean, sample.data.http_resp_size,
-    sample.data.same_src_and_dst_ip_ct, sample.data.same_src_ip_and_dst_pt_ct);
+void send_Sample(flow flowToSend)
+{
+  //Generar sample con la estructura de datos definitiva para enviar
+  Sample sample;
 
+  sample.src_numPackets = flowToSend.data.src_numPackets;
+  sample.dst_numPackets = flowToSend.data.dst_numPackets;
+  sample.src_totalBytes = flowToSend.data.src_totalBytes;
+  sample.sttl = flowToSend.data.sttl;
+  sample.dttl = flowToSend.data.dttl;
+  sample.s_load = flowToSend.data.s_load;
+  sample.d_load = flowToSend.data.d_load;
+  sample.s_inpkt = (float)flowToSend.data.s_inpkt;
+  sample.tcp_window = flowToSend.data.tcp_window;
+  sample.s_mean = flowToSend.data.s_mean;
+  sample.d_mean = flowToSend.data.d_mean;
+  sample.http_resp_size = flowToSend.data.http_resp_size;
+  sample.same_src_and_dst_ip_ct = flowToSend.data.same_src_and_dst_ip_ct;
+  sample.same_src_ip_and_dst_pt_ct = flowToSend.data.same_src_ip_and_dst_pt_ct;
+
+  //Abrir comunicaciones socket udp con el programa ML y enviar sample
+  SocketCommunication(sample);
 }
 
 // update de la inf del flow en sentido src->dst
@@ -413,10 +448,22 @@ int CircBuf_Print()
         printf("i=%d, Flow %s:%d -> %s:%d , proto: %s \n"
         ,i, buf.connections[i].f_srcip,buf.connections[i].f_srcPort ,buf.connections[i].f_dstip
         , buf.connections[i].f_dstPort, buf.connections[i].protocol);
+        if(buf.connections[i].protocol == NULL)
+          return(-1);
         sample = buf.connections[i];
         sample = Calculate_Features(sample);
         send_Sample(sample);
+
+
     }
+    /*
+    printf("%d,%d,%d,%d,%f,%f,%d,%f,%d,%f,%f,%d,%d,%d\n",
+      sample.data.dst_numPackets, sample.data.src_totalBytes, sample.data.sttl, sample.data.dttl,
+      sample.data.s_load, sample.data.d_load, sample.data.s_loss, sample.data.s_inpkt,
+      sample.data.tcp_window, sample.data.s_mean, sample.data.d_mean, sample.data.http_resp_size,
+      sample.data.same_src_and_dst_ip_ct, sample.data.same_src_ip_and_dst_pt_ct);
+    send_Sample(sample);
+    */
     printf("\n");
     return(0);
 }
@@ -478,7 +525,7 @@ void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetp
 
 //Funciona bien, pero va como por chunks, podria no dar un comportamiento esperado.
       pcap_stats(pd, &stats);
-      printf("%d packets received\n", stats.ps_recv - curr_stats.ps_recv );
+      //printf("%d packets received\n", stats.ps_recv - curr_stats.ps_recv );
       extra_info.loss = (stats.ps_drop - curr_stats.ps_drop) + (stats.ps_ifdrop - curr_stats.ps_ifdrop);
       //printf("%d packets dropped\n\n", stats.ps_drop);
       curr_stats = stats;
@@ -513,7 +560,7 @@ void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetp
           contentlen + (pt2 - contentlen) = '\0';
           int data_length = atoi(contentlen);
           //printf("%s\n", contentlen );
-          printf("%d\n", data_length);
+          //printf("%d\n", data_length);
           thisFlow.data.http_resp_size = data_length;
         }
 
@@ -652,6 +699,54 @@ int main(int argc, char **argv)
     }
     exit(0);
 }
+
+int SocketCommunication(Sample sample)
+{
+  struct  sockaddr_in     server;
+  struct  hostent         *hp;
+
+  int sd, server_len;
+  int port = 4545;
+  char* host = "localhost";
+  char rbuf[MAXLEN], sbuf[MAXLEN];
+  //Create socket
+  if ( (sd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 )
+  {
+          printf("socket creation failed");
+          exit(1);
+  }
+  bzero((char *)&server, sizeof(server));
+    server.sin_family = AF_INET;
+    server.sin_port = htons(port);
+    //server.sin_port = port;
+
+    if ((hp = gethostbyname(host)) == NULL) {
+        fprintf(stderr, "Can't get server's IP address\n");
+        close(sd);
+        exit(1);
+    }
+    server_len = sizeof(server);
+
+    if (sendto(sd, &sample, sizeof(Sample), 0, (struct sockaddr *)
+        &server, server_len) == -1)
+    {
+      fprintf(stderr, "sendto error\n");
+      close(sd);
+      exit(1);
+    }
+    //rbuf
+    if (recvfrom(sd, rbuf, sizeof(int), 0, (struct sockaddr *)
+        &server, &server_len) < 0)
+    {
+      fprintf(stderr, "recvfrom error\n");
+      close(sd);
+      exit(1);
+    }
+    close(sd);
+    printf("%s\n",rbuf );
+return 0;
+}
+
 
 /*
 void parse_packet(u_char *user, struct pcap_pkthdr *packethdr,
