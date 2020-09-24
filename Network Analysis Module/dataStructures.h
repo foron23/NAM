@@ -1,4 +1,5 @@
-#include <time.h>
+#ifndef _DATA_STRUCTURES
+#define _DATA_STRUCTURES
 
 typedef struct sample_data
 {
@@ -69,3 +70,5 @@ typedef struct Sample
   signed int same_src_and_dst_ip_ct;
   signed int same_src_ip_and_dst_pt_ct;
 } Sample;
+
+#endif

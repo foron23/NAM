@@ -5,11 +5,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
-
-//#include "dataStructures.h"
-
+#include "dataStructures.h"
 #include "globals.h"
-
 #include "calculation.h"
 #include "sniffer.h"
 #include "analyzer.h"
@@ -51,11 +48,11 @@ return NULL;
 
 int main(int argc, char **argv)
 {
-port = 4545;
-host = "localhost";
-debug = 0;
-packets = 0, c, i;
-//interface = "", bpfstr = "";
+int port = 4545;
+char *host = "localhost";
+int debug = 0;
+int packets = 0, c, i;
+char interface[256] = "", bpfstr[256] = "";
 
 // Get the command line options, if any
 while ((c = getopt (argc, argv, "hi:n:p:m:d")) != -1)

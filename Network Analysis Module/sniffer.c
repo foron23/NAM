@@ -36,6 +36,7 @@
 #include <netinet/ip_icmp.h>
 #include <time.h>
 #include "globals.h"
+#include "sniffer.h"
 //#include "dataStructures.h"
 //#include "circularBuffer.h"
 

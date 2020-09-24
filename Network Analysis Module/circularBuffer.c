@@ -1,12 +1,21 @@
 
 #include <time.h>
 #include <unistd.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include "dataStructures.h"
+#include "circularBuffer.h"
+#include "calculation.h"
+#include "sampler.h"
 
 #define CIRCBUFSIZE 100
 #define MAXLEN 4096
 
 
+CircBuf_Flow buf;
+CircBuf_Pkt pkt_buf;
 
 
 void CircBuf_Init_Flow()
@@ -65,9 +74,9 @@ flow CircBuf_Flow_pop()
   return thisFlow;
 }
 
-int CircBuf_Pkt_push(u_char *packetptr)
+int CircBuf_Pkt_push(uint8_t *packetptr)
 {
-  memcpy(&pkt_buf[pkt_buf.tail++],&packetptr, sizeof(packetptr));
+  memcpy(&pkt_buf.packets[pkt_buf.tail++],&packetptr, sizeof(packetptr));
   //pkt_buf[pkt_buf.tail++];
   //memcpy(&buf.connections[buf.tail++],&newFlow, sizeof(newFlow));
     if (pkt_buf.tail == pkt_buf.size)
@@ -77,15 +86,15 @@ int CircBuf_Pkt_push(u_char *packetptr)
     return pkt_buf.tail;
 }
 
-u_char* CircBuf_Pkt_pop()
+uint8_t* CircBuf_Pkt_pop()
 {
-  u_char *packetptr;
-  memcpy(&packetptr,&pkt_buf[pkt_buf.head++], sizeof(packetptr));
+  uint8_t *packetptr;
+  memcpy(&packetptr,&pkt_buf.packets[pkt_buf.head++], sizeof(packetptr));
   if (pkt_buf.head == pkt_buf.size)
   {
     pkt_buf.head = 0;
   }
-  return *packetptr;
+  return packetptr;
 }
 
 int CircBuf_Print()
