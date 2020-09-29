@@ -12,13 +12,18 @@
 #include "calculation.h"
 #include "sampler.h"
 
+//Parametros??
+int port;
+char* host;
 
 int sampler()
 {
 flow flowToSend;
-
+  //printf("Getting Sample...");
   flowToSend = CircBuf_Flow_pop();
+  printf("Sample popped,\n");
   flowToSend = Calculate_Features(flowToSend);
+  printf("Sending Sample\n");
   send_Sample(flowToSend);
 
   return 0;
@@ -56,7 +61,7 @@ int SocketCommunication(Sample sample)
   struct  hostent         *hp;
 
   int sd, server_len;
-
+  printf("this is host %s port %d\n",host, port );
   char rbuf[MAXLEN], sbuf[MAXLEN];
   //Create socket
   if ( (sd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 )
@@ -83,6 +88,7 @@ int SocketCommunication(Sample sample)
       close(sd);
       exit(1);
     }
+    printf("Sent.\n");
     //rbuf
     if (recvfrom(sd, rbuf, sizeof(int), 0, (struct sockaddr *)
         &server, &server_len) < 0)
@@ -91,6 +97,8 @@ int SocketCommunication(Sample sample)
       close(sd);
       exit(1);
     }
+    printf("Response received.\n");
+
     close(sd);
     printf("%s\n",rbuf );
 return 0;

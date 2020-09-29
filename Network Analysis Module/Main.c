@@ -1,4 +1,4 @@
-#include <pthread.h>
+//#include <pthread.h>
 #include <stdio.h>
 #include <pcap.h>
 #include <string.h>
@@ -13,12 +13,16 @@
 #include "sampler.h"
 
 
+int port = 4545;
+char *host = "localhost";
 
-
+int debug = 0;
+int packets = 0, c, i;
+char interface[256] = "", bpfstr[256] = "";
 
 void *sniffer_handler(void *snifferTh)
 {
-
+printf("Initializing sniffer thread \n");
 sniffer();
 
 /* the function must return something - NULL will do */
@@ -28,9 +32,12 @@ return NULL;
 
 void *analyzer_handler(void *analyzeTh)
 {
-
-PacketAnalyzer();
-
+printf("Initializing analyzer thread \n");
+//while(1)
+//{
+//  printf("Another analyzer round \n");
+  PacketAnalyzer();
+//}
 /* the function must return something - NULL will do */
 return NULL;
 
@@ -38,9 +45,12 @@ return NULL;
 
 void *sampler_handler(void *samplerTh)
 {
-
-sampler();
-
+printf("Initializing sampler thread \n");
+while(1)
+{
+  printf("Another sampler round \n");
+  sampler();
+}
 /* the function must return something - NULL will do */
 return NULL;
 
@@ -48,12 +58,11 @@ return NULL;
 
 int main(int argc, char **argv)
 {
-int port = 4545;
-char *host = "localhost";
+/*
 int debug = 0;
 int packets = 0, c, i;
 char interface[256] = "", bpfstr[256] = "";
-
+*/
 // Get the command line options, if any
 while ((c = getopt (argc, argv, "hi:n:p:m:d")) != -1)
 {
@@ -73,7 +82,8 @@ while ((c = getopt (argc, argv, "hi:n:p:m:d")) != -1)
         port = atoi(optarg);
         break;
     case 'm':
-        strcpy(host, optarg);
+        //strcpy(host, optarg);
+        memcpy(&host,&optarg, sizeof(host));
         break;
     case 'd':
         debug = 1;
@@ -88,6 +98,7 @@ for (i = optind; i < argc; i++)
     strcat(bpfstr, argv[i]);
     strcat(bpfstr, " ");
 }
+printf("this is host %s port %d\n",host, port );
 
 printf("Starting buffer...\n" );
 CircBuf_Init_Flow();
@@ -106,6 +117,36 @@ if(pthread_create(&SnifferThread, NULL, sniffer_handler, 0))
   return 1;
 
 }
+if(pthread_create(&AnalyzeThread, NULL, analyzer_handler, 0))
+{
 
+  fprintf(stderr, "Error creating analyzer thread\n");
+  return 1;
+
+}
+if(pthread_create(&SamplerThread, NULL, sampler_handler, 0))
+{
+
+  fprintf(stderr, "Error creating sampler thread\n");
+  return 1;
+
+}
+
+
+if(pthread_join(SnifferThread, NULL)) {
+fprintf(stderr, "Error joining sniffer thread\n");
+return 2;
+}
+if(pthread_join(AnalyzeThread, NULL)) {
+fprintf(stderr, "Error joining analyzer thread\n");
+return 2;
+}
+if(pthread_join(SamplerThread, NULL)) {
+fprintf(stderr, "Error joining sampler thread\n");
+return 2;
+}
+
+CircBuf_Finish();
+printf("Program finished.\n" );
 exit(0);
 }

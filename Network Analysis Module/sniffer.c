@@ -48,9 +48,12 @@
 
 
 
-//pcap_t* pd;
-//int linkhdrlen;
-
+pcap_t* pd;
+int linkhdrlen;
+struct pcap_stat curr_stats, stats;
+//Deberia pasarlos x parametro
+int packets;
+char interface[256], bpfstr[256];
 
 pcap_t* open_pcap_socket(char* device, const char* bpfstr)
 {
@@ -147,8 +150,9 @@ void capture_loop(pcap_t* pd, int packets, pcap_handler func)
 
 void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetptr)
 {
-
+  //printf("Packet Incoming... ");
   CircBuf_Pkt_push(packetptr);
+  //printf("Packet pushed\n");
 
 }
 

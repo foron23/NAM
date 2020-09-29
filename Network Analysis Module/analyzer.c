@@ -20,6 +20,7 @@
 
 #define FLOW_NOT_FOUND 404
 
+
 //Funcion de busqueda de flow en el buffer.
 //IN: Puntero al buffer circular que se va a usar y el flow que se quiere checkear
 //OUT: 2 output previstos:
@@ -132,26 +133,34 @@ int isReversed(flow thisFlow, flow newFlow)
 
 int PacketAnalyzer()
 {
-struct ip* iphdr;
-struct icmphdr* icmphdr;
-struct tcphdr* tcphdr;
-struct udphdr* udphdr;
-u_char *packetptr;
 
-flow thisFlow;
-directional_info extra_info;
-struct timespec timestamp;
-double medition;
+  struct ip* iphdr;
+  struct icmphdr* icmphdr;
+  struct tcphdr* tcphdr;
+  struct udphdr* udphdr;
+  u_char *packetptr;
 
-char iphdrInfo[256], srcip[256], dstip[256];
-unsigned short id, seq;
-int srcPort, dstPort, byteCount;
-short int tcp_win, ind;
+  flow thisFlow;
+  directional_info extra_info;
+  struct timespec timestamp;
+  double medition;
 
-char *data;
-char *contentlen, *pt2;
+  char iphdrInfo[256], srcip[256], dstip[256];
+  unsigned short id, seq;
+  int srcPort, dstPort, byteCount;
+  short int tcp_win, ind;
 
+  char *data;
+  char *contentlen, *pt2;
+
+while(1)
+{
+printf("Another analyzer round \n");
+
+printf("Get the packet...\n");
 packetptr = CircBuf_Pkt_pop();
+printf("Packet popped...\n");
+
 //pcap_stats(pd, &curr_stats);
 
 //printf("sizeof flow %ld\n",sizeof(flow));
@@ -164,11 +173,14 @@ clock_gettime(CLOCK_REALTIME,&timestamp);
 packetptr += linkhdrlen;
 iphdr = (struct ip*)packetptr;
 
+printf("Petada 1\n");
+//El codigo revienta aqui cuando el el buffer de paquetes no hace pop
 strcpy(thisFlow.f_srcip, inet_ntoa(iphdr->ip_src));
 strcpy(thisFlow.f_dstip, inet_ntoa(iphdr->ip_dst));
 thisFlow.data.http_resp_size = 0;
 extra_info.byteCount = ntohs(iphdr->ip_len);
 extra_info.ttl = iphdr->ip_ttl;
+//printf("Petada 2\n");
 
 //Funciona bien, pero va como por chunks, podria no dar un comportamiento esperado.
     pcap_stats(pd, &stats);
@@ -176,6 +188,7 @@ extra_info.ttl = iphdr->ip_ttl;
     extra_info.loss = (stats.ps_drop - curr_stats.ps_drop) + (stats.ps_ifdrop - curr_stats.ps_ifdrop);
     //printf("%d packets dropped\n\n", stats.ps_drop);
     curr_stats = stats;
+//printf("Petada 3\n");
 
 // Advance to the transport layer header then parse and display
 // the fields based on the type of hearder: tcp, udp or icmp.
@@ -210,6 +223,7 @@ case IPPROTO_TCP:
         //printf("%d\n", data_length);
         thisFlow.data.http_resp_size = data_length;
       }
+      //printf("Petada 4\n");
 
       //sacar el numero de bytes de la respuesta de las cabeceras http
       ///////// Posible idea: https://stackoverflow.com/questions/22077802/simple-c-example-of-doing-an-http-post-and-consuming-the-response
@@ -227,6 +241,7 @@ case IPPROTO_UDP:
     thisFlow.f_dstPort = ntohs(udphdr->dest);
     thisFlow.protocol = "UDP";
     //printf("im an udp packet\n");
+    //printf("Petada 5\n");
 
     break;
 
@@ -237,32 +252,41 @@ case IPPROTO_ICMP:
 
     break;
 }
-
+//printf("Gotta fetch\n");
 //Tenemos toda la informacion necesaria para mirar los flows.
 ind = fetch_flow( thisFlow);
 //printf("fetched %d\n", ind);
+//printf("Petada 6\n");
 
 //Hay que crear un nuevo flow en el buffer
 if(ind==FLOW_NOT_FOUND)
 {
-   id =  CircBuf_Flow_push(thisFlow, extra_info, timestamp);
+  //printf("Pushing a new flow..." );
+  id =  CircBuf_Flow_push(thisFlow, extra_info, timestamp);
+  printf("Flow pushed.\n" );
+
 }
 else  //Ya existe el flow, donde hay que meter la informacion nueva?
 {
+  printf("fetched %d\n", ind);
   if(isReversed(buf.connections[ind], thisFlow))
   {
-    //printf(" updating dst->src\n" );
+    printf(" updating dst->src\n" );
     updateFlow_dst( thisFlow,  extra_info ,ind, timestamp);
+    printf(" updated dst->src\n" );
+
   }
   else
   {
-    //printf(" updating src->dst\n" );
+    printf(" updating src->dst\n" );
     updateFlow_src( thisFlow,  extra_info ,ind, timestamp);
+    printf(" updated src->dst\n" );
+
   }
 }
 //if(ind != FLOW_NOT_FOUND)
   //printf("buf pos %d, code %d\n", id, ind );
-//printf("Flow %s:%d -> %s:%d, proto: %s \n",thisFlow.f_srcip,thisFlow.f_srcPort,thisFlow.f_dstip,thisFlow.f_dstPort, thisFlow.protocol);
+printf("Flow %s:%d -> %s:%d, proto: %s \n",thisFlow.f_srcip,thisFlow.f_srcPort,thisFlow.f_dstip,thisFlow.f_dstPort, thisFlow.protocol);
     //if(thisFlow.f_srcPort == 80)
     //  printf("Flow %s:%d -> %s:%d, proto: %s \n",thisFlow.f_srcip,thisFlow.f_srcPort,thisFlow.f_dstip,thisFlow.f_dstPort, thisFlow.protocol);
 
@@ -273,5 +297,7 @@ printf("%d,%d,%d,%d,%f,%f,%d,%f,%d,%f,%f,%d,%d,%d\n",
   buf.connections[tail].data.tcp_window, buf.connections[tail].data.s_mean, buf.connections[tail].data.d_mean, buf.connections[tail].data.http_resp_size,
   buf.connections[tail].data.same_src_and_dst_ip_ct, buf.connections[tail].data.same_src_ip_and_dst_pt_ct);
 */
+printf("Packet processed\n");
+}
 return 0;
 }
