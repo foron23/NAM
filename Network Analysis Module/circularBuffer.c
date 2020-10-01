@@ -1,4 +1,5 @@
 #include <pthread.h>
+#include <semaphore.h>
 #include <time.h>
 #include <unistd.h>
 #include <stdint.h>
@@ -22,12 +23,17 @@ CircBuf_Flow buf;
 pthread_mutex_t pkt_lock;
 pthread_mutex_t flow_lock;
 
+sem_t sem_pkt_in;
+sem_t sem_pkt_out;
+sem_t sem_flow_in;
+sem_t sem_flow_out;
+
 //pthread_cond_t pkt_ovr_cond = PTHREAD_COND_INITIALIZER;
 //pthread_cond_t flow_ovr_cond = PTHREAD_COND_INITIALIZER;
 //pthread_cond_t pkt_und_cond = PTHREAD_COND_INITIALIZER;
 //pthread_cond_t flow_und_cond = PTHREAD_COND_INITIALIZER;
-pthread_cond_t pkt_cond = PTHREAD_COND_INITIALIZER;
-pthread_cond_t flow_cond = PTHREAD_COND_INITIALIZER;
+//pthread_cond_t pkt_cond = PTHREAD_COND_INITIALIZER;
+//pthread_cond_t flow_cond = PTHREAD_COND_INITIALIZER;
 
 int pkt_count;
 int flow_count;
@@ -41,6 +47,8 @@ void CircBuf_Init_Flow()
       printf("\n flow mutex init has failed\n");
       exit(1);
   }
+  sem_init(&sem_flow_in, 1, CIRCBUFSIZE);
+  sem_init(&sem_flow_out, 1, 0);
   //flow_cond  = PTHREAD_COND_INITIALIZER;
   flow_count = 0;
   buf.head = 0;
@@ -54,6 +62,8 @@ void CircBuf_Init_Pkt()
       printf("\n packet mutex init has failed\n");
       exit(1);
   }
+  sem_init(&sem_pkt_in, 1, MAXLEN);
+  sem_init(&sem_pkt_out, 1, 0);
   //pkt_cond  = PTHREAD_COND_INITIALIZER;
   pkt_count = 0;
   pkt_buf.head = 0;
@@ -82,10 +92,10 @@ int CircBuf_Flow_push(flow newFlow, directional_info extra_info, struct timespec
   newFlow.data.d_mean = 0.0;
 
   //newFlow.data.http_resp_size = 0; //este solo deberia llenarse en caso de que llegue un paquete desde un puerto 80 o 443
+  sem_wait(&sem_flow_in);
   pthread_mutex_lock(&flow_lock);
-  while (flow_count == CIRCBUFSIZE)
-    pthread_cond_wait(&flow_cond, &flow_lock);
-    //pthread_cond_wait(&flow_ovr_cond, &flow_lock);
+  printf("flow mutex in push\n" );
+
   //printf("%d\n", buf.tail );
   buf.connections[buf.tail++] = newFlow;
   printf("flow buf tail %d\n", buf.tail );
@@ -95,12 +105,11 @@ int CircBuf_Flow_push(flow newFlow, directional_info extra_info, struct timespec
     {
       buf.tail = 0;
     }
-    if (flow_count == 0)
-        pthread_cond_signal(&flow_cond);
 
-//      pthread_cond_signal(&flow_und_cond);
-    flow_count++;
     pthread_mutex_unlock(&flow_lock);
+    sem_post(&sem_flow_out);
+    printf("flow mutex out push\n" );
+
 
     return buf.tail;
 }
@@ -109,12 +118,10 @@ flow CircBuf_Flow_pop()
 {
   flow thisFlow;
 
-  pthread_mutex_lock(&flow_lock);
-  printf("flow mutex in\n" );
 
-  while (flow_count == 0)
-//    pthread_cond_wait(&flow_und_cond, &flow_lock);
-  pthread_cond_wait(&flow_cond, &flow_lock);
+  sem_wait(&sem_flow_out);
+  pthread_mutex_lock(&flow_lock);
+  printf("flow mutex in pop\n" );
 
   thisFlow = buf.connections[buf.head++];
   printf("flow head %d\n",buf.head  );
@@ -123,24 +130,20 @@ flow CircBuf_Flow_pop()
   {
     buf.head = 0;
   }
-  if (flow_count == CIRCBUFSIZE)
-    pthread_cond_signal(&flow_cond);
 
-//    pthread_cond_signal(&flow_ovr_cond);
-  flow_count--;
-  printf("flow mutex out\n" );
+  sem_post(&sem_flow_in);
   pthread_mutex_unlock(&flow_lock);
+  printf("flow mutex out pop\n" );
 
   return thisFlow;
 }
 
 int CircBuf_Pkt_push(uint8_t *packetptr)
 {
+
+  sem_wait(&sem_pkt_in);
   pthread_mutex_lock(&pkt_lock);
   printf("pkt mutex in push\n" );
-  while (pkt_count == MAXLEN)
-//    pthread_cond_wait(&pkt_ovr_cond, &pkt_lock);
-      pthread_cond_wait(&pkt_cond, &pkt_lock);
 
   memcpy(&pkt_buf.packets[pkt_buf.tail++],&packetptr, sizeof(packetptr));
   //pkt_buf[pkt_buf.tail++];
@@ -150,14 +153,10 @@ int CircBuf_Pkt_push(uint8_t *packetptr)
     {
       pkt_buf.tail = 0;
     }
-  if (pkt_count == 0)
-//    pthread_cond_signal(&pkt_und_cond);
-      pthread_cond_signal(&pkt_cond);
 
-  pkt_count++;
-  //printf(" pkt mutex out\n" );
-  printf("pkt mutex out push\n\n" );
+  sem_post(&sem_pkt_out);
   pthread_mutex_unlock(&pkt_lock);
+  printf("pkt mutex out push\n\n" );
 
     return pkt_buf.tail;
 }
@@ -166,25 +165,22 @@ uint8_t* CircBuf_Pkt_pop()
 {
   uint8_t *packetptr;
 
+
+  sem_wait(&sem_pkt_out);
   pthread_mutex_lock(&pkt_lock);
   printf("pkt mutex in pop\n" );
+//Creo que el problema de los pop proviene de la asignacion de memoria hecha aqui.
+  memcpy(&packetptr,&pkt_buf.packets[pkt_buf.head], sizeof(pkt_buf.packets[pkt_buf.head]));
+  pkt_buf.head++;
 
-  while (pkt_count == 0)
-      pthread_cond_wait(&pkt_cond, &pkt_lock);
-
-//    pthread_cond_wait(&pkt_und_cond, &pkt_lock);
-  memcpy(&packetptr,&pkt_buf.packets[pkt_buf.head++], sizeof(packetptr));
   if (pkt_buf.head == pkt_buf.size)
   {
     pkt_buf.head = 0;
   }
-  if (pkt_count == MAXLEN)
-      pthread_cond_signal(&pkt_cond);
 
-//    pthread_cond_signal(&pkt_ovr_cond);
-  pkt_count--;
-  printf("pkt mutex out pop\n" );
+  sem_post(&sem_pkt_in);
   pthread_mutex_unlock(&pkt_lock);
+  printf("pkt mutex out pop\n" );
 
   return packetptr;
 }
@@ -221,4 +217,9 @@ void CircBuf_Finish()
 {
   pthread_mutex_destroy(&pkt_lock);
   pthread_mutex_destroy(&flow_lock);
+  sem_destroy(&sem_pkt_in);
+  sem_destroy(&sem_pkt_out);
+  sem_destroy(&sem_flow_in);
+  sem_destroy(&sem_flow_out);
+
 }

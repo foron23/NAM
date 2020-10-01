@@ -46,11 +46,10 @@ return NULL;
 void *sampler_handler(void *samplerTh)
 {
 printf("Initializing sampler thread \n");
-while(1)
-{
-  printf("Another sampler round \n");
+//while(1)
+//{
   sampler();
-}
+//}
 /* the function must return something - NULL will do */
 return NULL;
 
@@ -98,7 +97,7 @@ for (i = optind; i < argc; i++)
     strcat(bpfstr, argv[i]);
     strcat(bpfstr, " ");
 }
-printf("this is host %s port %d\n",host, port );
+//printf("this is host %s port %d\n",host, port );
 
 printf("Starting buffer...\n" );
 CircBuf_Init_Flow();
