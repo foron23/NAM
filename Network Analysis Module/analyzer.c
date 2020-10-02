@@ -170,7 +170,7 @@ printf("Packet popped...\n");
 //Hay paquetes
 clock_gettime(CLOCK_REALTIME,&timestamp);
 //printf("this timestamp, sec: %ld, nsec: %ld \n",timestamp.tv_sec, timestamp.tv_nsec );
-packetptr += linkhdrlen;
+//packetptr += linkhdrlen;
 iphdr = (struct ip*)packetptr;
 
 printf("Petada 1\n");

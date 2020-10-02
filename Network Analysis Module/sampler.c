@@ -91,7 +91,7 @@ int SocketCommunication(Sample sample)
       close(sd);
       exit(1);
     }
-    printf("Sent.\n");
+    printf("--------------------------------------------------------------->Sent.\n");
     //rbuf
     /*
     if (recvfrom(sd, rbuf, sizeof(int), 0, (struct sockaddr *)

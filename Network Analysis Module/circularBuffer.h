@@ -31,11 +31,14 @@ typedef struct CircBuf_Pkt
   int head;
   int tail;
   int size;
-  uint8_t packets[MAXLEN];
+  //uint8_t packets[MAXLEN];
+  //https://www.eskimo.com/~scs/cclass/int/sx9b.html
+  uint8_t* packets[MAXLEN];
+
 } CircBuf_Pkt;
 
 //CircBuf_Pkt pkt_buf;
-//SCircBuf_Flow buf;
+//CircBuf_Flow buf;
 
 void CircBuf_Init_Flow();
 void CircBuf_Init_Pkt();

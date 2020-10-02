@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <netinet/ip.h>
 #include "dataStructures.h"
 #include "circularBuffer.h"
 #include "calculation.h"
@@ -141,11 +142,21 @@ flow CircBuf_Flow_pop()
 int CircBuf_Pkt_push(uint8_t *packetptr)
 {
 
+  struct ip* iphdr;
+  //uint8_t* mypoint;
+  iphdr = (struct ip*)packetptr;
+  //printf("size of packet %ld ",ntohs(iphdr->ip_len) * sizeof(uint8_t));
+  //printf("size of packet ip pointer array %d \n",ntohs(iphdr->ip_len)*ntohs(iphdr->ip_len) * sizeof(uint8_t));
+  //int length  = ntohs(iphdr->ip_len);
+  //(uint8_t*)malloc( ntohs(iphdr->ip_len) * sizeof(uint8_t));
+  //mypoint =
+
   sem_wait(&sem_pkt_in);
   pthread_mutex_lock(&pkt_lock);
   printf("pkt mutex in push\n" );
-
-  memcpy(&pkt_buf.packets[pkt_buf.tail++],&packetptr, sizeof(packetptr));
+  pkt_buf.packets[pkt_buf.tail] = (uint8_t *)malloc( ntohs(iphdr->ip_len) * sizeof(uint8_t));
+  //printf("size of packet placeholder %ld \n",sizeof(pkt_buf.packets[pkt_buf.tail]));
+  memcpy(&pkt_buf.packets[pkt_buf.tail++],&packetptr, ntohs(iphdr->ip_len) * sizeof(uint8_t));
   //pkt_buf[pkt_buf.tail++];
   //memcpy(&buf.connections[buf.tail++],&newFlow, sizeof(newFlow));
   printf("pkt_buf tail %d\n", pkt_buf.tail );
