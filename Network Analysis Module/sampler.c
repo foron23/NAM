@@ -24,9 +24,9 @@ while(1)
   printf("Another sampler round \n");
   //printf("Getting Sample...");
   flowToSend = CircBuf_Flow_pop();
-  printf("Sample popped,\n");
+  //printf("Sample popped,\n");
   flowToSend = Calculate_Features(flowToSend);
-  printf("Sending Sample\n");
+  //printf("Sending Sample\n");
   send_Sample(flowToSend);
 }
   return 0;
@@ -52,6 +52,13 @@ void send_Sample(flow flowToSend)
   sample.http_resp_size = flowToSend.data.http_resp_size;
   sample.same_src_and_dst_ip_ct = flowToSend.data.same_src_and_dst_ip_ct;
   sample.same_src_ip_and_dst_pt_ct = flowToSend.data.same_src_ip_and_dst_pt_ct;
+/*
+  printf("%d,%d,%d,%d,%f,%f,%d,%f,%d,%f,%f,%d,%d,%d\n",
+    flowToSend.data.dst_numPackets, flowToSend.data.src_totalBytes, flowToSend.data.sttl, flowToSend.data.dttl,
+    flowToSend.data.s_load, flowToSend.data.d_load, flowToSend.data.s_loss, flowToSend.data.s_inpkt,
+    flowToSend.data.tcp_window, flowToSend.data.s_mean, flowToSend.data.d_mean, flowToSend.data.http_resp_size,
+    flowToSend.data.same_src_and_dst_ip_ct, flowToSend.data.same_src_ip_and_dst_pt_ct);
+*/
 
   //Abrir comunicaciones socket udp con el programa ML y enviar sample
   SocketCommunication(sample);

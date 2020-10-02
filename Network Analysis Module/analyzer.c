@@ -157,9 +157,9 @@ while(1)
 {
 printf("Another analyzer round \n");
 
-printf("Get the packet...\n");
+//printf("Get the packet...\n");
 packetptr = CircBuf_Pkt_pop();
-printf("Packet popped...\n");
+//printf("Packet popped...\n");
 
 //pcap_stats(pd, &curr_stats);
 
@@ -173,7 +173,7 @@ clock_gettime(CLOCK_REALTIME,&timestamp);
 //packetptr += linkhdrlen;
 iphdr = (struct ip*)packetptr;
 
-printf("Petada 1\n");
+//printf("Petada 1\n");
 //El codigo revienta aqui cuando el el buffer de paquetes no hace pop
 strcpy(thisFlow.f_srcip, inet_ntoa(iphdr->ip_src));
 strcpy(thisFlow.f_dstip, inet_ntoa(iphdr->ip_dst));
@@ -271,22 +271,22 @@ else  //Ya existe el flow, donde hay que meter la informacion nueva?
   printf("fetched %d\n", ind);
   if(isReversed(buf.connections[ind], thisFlow))
   {
-    printf(" updating dst->src\n" );
+    //printf(" updating dst->src\n" );
     updateFlow_dst( thisFlow,  extra_info ,ind, timestamp);
-    printf(" updated dst->src\n" );
+    printf("updated dst->src\n" );
 
   }
   else
   {
-    printf(" updating src->dst\n" );
+    //printf(" updating src->dst\n" );
     updateFlow_src( thisFlow,  extra_info ,ind, timestamp);
-    printf(" updated src->dst\n" );
+    printf("updated src->dst\n" );
 
   }
 }
 //if(ind != FLOW_NOT_FOUND)
   //printf("buf pos %d, code %d\n", id, ind );
-printf("Flow %s:%d -> %s:%d, proto: %s \n",thisFlow.f_srcip,thisFlow.f_srcPort,thisFlow.f_dstip,thisFlow.f_dstPort, thisFlow.protocol);
+//printf("Flow %s:%d -> %s:%d, proto: %s \n",thisFlow.f_srcip,thisFlow.f_srcPort,thisFlow.f_dstip,thisFlow.f_dstPort, thisFlow.protocol);
     //if(thisFlow.f_srcPort == 80)
     //  printf("Flow %s:%d -> %s:%d, proto: %s \n",thisFlow.f_srcip,thisFlow.f_srcPort,thisFlow.f_dstip,thisFlow.f_dstPort, thisFlow.protocol);
 

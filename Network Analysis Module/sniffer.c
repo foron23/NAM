@@ -150,9 +150,9 @@ void capture_loop(pcap_t* pd, int packets, pcap_handler func)
 
 void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetptr)
 {
-  struct ip* iphdr;
+  //struct ip* iphdr;
   //uint8_t* mypoint;
-  iphdr = (struct ip*)packetptr;
+  //iphdr = (struct ip*)packetptr;
   //printf("Packet Incoming... ");
   packetptr += linkhdrlen;
 

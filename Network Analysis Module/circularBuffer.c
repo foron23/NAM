@@ -24,6 +24,7 @@ CircBuf_Flow buf;
 pthread_mutex_t pkt_lock;
 pthread_mutex_t flow_lock;
 
+//www.csc.villanova.edu/~mdamian/threads/posixsem.html
 sem_t sem_pkt_in;
 sem_t sem_pkt_out;
 sem_t sem_flow_in;
@@ -72,34 +73,55 @@ void CircBuf_Init_Pkt()
   pkt_buf.size = MAXLEN;
 }
 
+//int CircBuf_Flow_push(flow* newFlow, directional_info extra_info, struct timespec time)
 int CircBuf_Flow_push(flow newFlow, directional_info extra_info, struct timespec time)
 {
 
-  newFlow.data.src_numPackets = 1;
-  newFlow.data.dst_numPackets = 0;
-  newFlow.data.src_totalBytes = extra_info.byteCount;
-  newFlow.data.dst_totalBytes = 0;
-  newFlow.data.sttl = extra_info.ttl;
-  newFlow.data.dttl = 0;
-  newFlow.data.s_loss = extra_info.loss;
-  newFlow.data.s_inpkt = 0.0;
-  newFlow.data.total_arrival_time = 0.0;
-  newFlow.data.first_tmp = time;
-  newFlow.data.current_tmp = time;
-  newFlow.data.current_tmp_src = time;
-  newFlow.data.s_load = 0.0;
-  newFlow.data.d_load = 0.0;
-  newFlow.data.s_mean = 0.0;
-  newFlow.data.d_mean = 0.0;
+    newFlow.data.src_numPackets = 1;
+    newFlow.data.dst_numPackets = 0;
+    newFlow.data.src_totalBytes = extra_info.byteCount;
+    newFlow.data.dst_totalBytes = 0;
+    newFlow.data.sttl = extra_info.ttl;
+    newFlow.data.dttl = 0;
+    newFlow.data.s_loss = extra_info.loss;
+    newFlow.data.s_inpkt = 0.0;
+    newFlow.data.total_arrival_time = 0.0;
+    newFlow.data.first_tmp = time;
+    newFlow.data.current_tmp = time;
+    newFlow.data.current_tmp_src = time;
+    newFlow.data.s_load = 0.0;
+    newFlow.data.d_load = 0.0;
+    newFlow.data.s_mean = 0.0;
+    newFlow.data.d_mean = 0.0;
 
+//Usando las referencias salen flows vacios?
+    /*
+      newFlow->data.src_numPackets = 1;
+      newFlow->data.dst_numPackets = 0;
+      newFlow->data.src_totalBytes = extra_info.byteCount;
+      newFlow->data.dst_totalBytes = 0;
+      newFlow->data.sttl = extra_info.ttl;
+      newFlow->data.dttl = 0;
+      newFlow->data.s_loss = extra_info.loss;
+      newFlow->data.s_inpkt = 0.0;
+      newFlow->data.total_arrival_time = 0.0;
+      newFlow->data.first_tmp = time;
+      newFlow->data.current_tmp = time;
+      newFlow->data.current_tmp_src = time;
+      newFlow->data.s_load = 0.0;
+      newFlow->data.d_load = 0.0;
+      newFlow->data.s_mean = 0.0;
+      newFlow->data.d_mean = 0.0;
+`*/
   //newFlow.data.http_resp_size = 0; //este solo deberia llenarse en caso de que llegue un paquete desde un puerto 80 o 443
   sem_wait(&sem_flow_in);
   pthread_mutex_lock(&flow_lock);
-  printf("flow mutex in push\n" );
+  //printf("flow mutex in push\n" );
 
   //printf("%d\n", buf.tail );
-  buf.connections[buf.tail++] = newFlow;
-  printf("flow buf tail %d\n", buf.tail );
+  printf("(push)flow buf tail %d\n", buf.tail );
+  memcpy(&buf.connections[buf.tail++],&newFlow,sizeof(newFlow));
+  //buf.connections[buf.tail++] = newFlow;
 
     //memcpy(&buf.connections[buf.tail++],&newFlow, sizeof(newFlow));
     if (buf.tail == buf.size)
@@ -107,9 +129,10 @@ int CircBuf_Flow_push(flow newFlow, directional_info extra_info, struct timespec
       buf.tail = 0;
     }
 
-    pthread_mutex_unlock(&flow_lock);
     sem_post(&sem_flow_out);
-    printf("flow mutex out push\n" );
+    pthread_mutex_unlock(&flow_lock);
+
+    //printf("flow mutex out push\n" );
 
 
     return buf.tail;
@@ -122,10 +145,11 @@ flow CircBuf_Flow_pop()
 
   sem_wait(&sem_flow_out);
   pthread_mutex_lock(&flow_lock);
-  printf("flow mutex in pop\n" );
+  //printf("flow mutex in pop\n" );
 
-  thisFlow = buf.connections[buf.head++];
-  printf("flow head %d\n",buf.head  );
+  //thisFlow = buf.connections[buf.head++];
+  printf("(pop)flow head %d\n",buf.head  );
+  memcpy(&thisFlow,&buf.connections[buf.head++],sizeof(thisFlow));
 
   if (buf.head == buf.size)
   {
@@ -134,7 +158,7 @@ flow CircBuf_Flow_pop()
 
   sem_post(&sem_flow_in);
   pthread_mutex_unlock(&flow_lock);
-  printf("flow mutex out pop\n" );
+  //printf("flow mutex out pop\n" );
 
   return thisFlow;
 }
@@ -153,13 +177,13 @@ int CircBuf_Pkt_push(uint8_t *packetptr)
 
   sem_wait(&sem_pkt_in);
   pthread_mutex_lock(&pkt_lock);
-  printf("pkt mutex in push\n" );
+  //printf("pkt mutex in push\n" );
   pkt_buf.packets[pkt_buf.tail] = (uint8_t *)malloc( ntohs(iphdr->ip_len) * sizeof(uint8_t));
   //printf("size of packet placeholder %ld \n",sizeof(pkt_buf.packets[pkt_buf.tail]));
+  //printf("(push)pkt_buf tail %d\n", pkt_buf.tail);
   memcpy(&pkt_buf.packets[pkt_buf.tail++],&packetptr, ntohs(iphdr->ip_len) * sizeof(uint8_t));
   //pkt_buf[pkt_buf.tail++];
   //memcpy(&buf.connections[buf.tail++],&newFlow, sizeof(newFlow));
-  printf("pkt_buf tail %d\n", pkt_buf.tail );
     if (pkt_buf.tail == pkt_buf.size)
     {
       pkt_buf.tail = 0;
@@ -167,7 +191,7 @@ int CircBuf_Pkt_push(uint8_t *packetptr)
 
   sem_post(&sem_pkt_out);
   pthread_mutex_unlock(&pkt_lock);
-  printf("pkt mutex out push\n\n" );
+  //printf("pkt mutex out push\n\n" );
 
     return pkt_buf.tail;
 }
@@ -179,11 +203,12 @@ uint8_t* CircBuf_Pkt_pop()
 
   sem_wait(&sem_pkt_out);
   pthread_mutex_lock(&pkt_lock);
-  printf("pkt mutex in pop\n" );
+  //printf("pkt mutex in pop\n" );
 //Creo que el problema de los pop proviene de la asignacion de memoria hecha aqui.
   memcpy(&packetptr,&pkt_buf.packets[pkt_buf.head], sizeof(pkt_buf.packets[pkt_buf.head]));
+  //free(pkt_buf.packets[pkt_buf.head]);
+  //printf("(pop)pkt_buf head %d\n", pkt_buf.head );
   pkt_buf.head++;
-
   if (pkt_buf.head == pkt_buf.size)
   {
     pkt_buf.head = 0;
@@ -191,7 +216,7 @@ uint8_t* CircBuf_Pkt_pop()
 
   sem_post(&sem_pkt_in);
   pthread_mutex_unlock(&pkt_lock);
-  printf("pkt mutex out pop\n" );
+  //printf("pkt mutex out pop\n" );
 
   return packetptr;
 }
