@@ -1,5 +1,3 @@
-//#include "circularBuffer.h"
-//#include "dataStructures.h"
 
 int fetch_flow(flow thisFlow );
 void updateFlow_src(flow newFlow, directional_info extra_info ,int index, struct timespec time);

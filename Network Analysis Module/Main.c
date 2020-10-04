@@ -97,7 +97,6 @@ for (i = optind; i < argc; i++)
     strcat(bpfstr, argv[i]);
     strcat(bpfstr, " ");
 }
-//printf("this is host %s port %d\n",host, port );
 
 printf("Starting buffer...\n" );
 CircBuf_Init_Flow();
@@ -105,7 +104,7 @@ CircBuf_Init_Pkt();
 printf("Buffer initialized.\n" );
 
 
-/* this variable is our reference to the other threads */
+/* this variables are our references to the other threads */
 pthread_t SnifferThread, AnalyzeThread, SamplerThread;
 
 /* create the threads for the processes */

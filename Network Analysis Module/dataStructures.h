@@ -8,12 +8,12 @@ typedef struct sample_data
   signed int sttl, dttl;
   float s_load, d_load;
   signed int s_loss;
-  signed int tcp_window; //source
+  signed int tcp_window; 
   double s_inpkt;
   double total_arrival_time;
   struct timespec first_tmp;
   struct timespec current_tmp_src;
-  struct timespec current_tmp;  //para el calculo final de tiempo
+  struct timespec current_tmp;
   float s_mean, d_mean;
   signed int http_resp_size;
   signed int same_src_and_dst_ip_ct;
@@ -25,7 +25,7 @@ typedef struct flow
 {
   char f_srcip[256],f_dstip[256];
   signed int f_srcPort, f_dstPort;
-  char* protocol;// tengo que cambiarlo por un mapeo de int (enum)
+  char* protocol;
   sample_data data;
 } flow;
 

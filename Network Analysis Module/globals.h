@@ -16,7 +16,3 @@ extern char interface[256], bpfstr[256];
 
 extern pcap_t* pd;
 extern int linkhdrlen;
-
-//Mutexes
-//extern pthread_mutex_t pkt_lock;
-//extern pthread_mutex_t flow_lock;

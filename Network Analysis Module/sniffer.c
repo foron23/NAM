@@ -37,10 +37,8 @@
 #include <time.h>
 #include "globals.h"
 #include "sniffer.h"
-//#include "dataStructures.h"
-//#include "circularBuffer.h"
 
-#define MAXLEN 4096
+
 #define FLOW_NOT_FOUND 404
 #define CIRCBUFSIZE 100
 
@@ -51,7 +49,8 @@
 pcap_t* pd;
 int linkhdrlen;
 struct pcap_stat curr_stats, stats;
-//Deberia pasarlos x parametro
+//int debug;
+
 int packets;
 char interface[256], bpfstr[256];
 
@@ -59,24 +58,20 @@ pcap_t* open_pcap_socket(char* device, const char* bpfstr)
 {
     char errbuf[PCAP_ERRBUF_SIZE];
     pcap_t* pd;
-//    pcap_if_t* interface_list;
+    pcap_if_t* interface_list;
     uint32_t  srcip, netmask;
     struct bpf_program  bpf;
 
-    //pcap_if_t *interface_list;
-    //result = pcap_findalldevs(&interface_list,errbuf);
 
-// Deberia funcionar con esta funcion, pero da segmentation fault
-    //pcap_findalldevs(&interface_list, errbuf);
+    pcap_findalldevs(&interface_list, errbuf);
 
     // If no network interface (device) is specfied, get the first one.
-    if (!*device && !(device = pcap_lookupdev(errbuf)))
-    //if (!*device && !(device = interface_list->name))
+    if (!*device && !(device = interface_list->name))
     {
         printf("pcap_lookupdev(): %s\n", errbuf);
         return NULL;
     }
-    //printf("%s\n",device );
+    free(interface_list);
     // Open the device for live capture, as opposed to reading a packet
     // capture file.
     if ((pd = pcap_open_live(device, BUFSIZ, 1, 0, errbuf)) == NULL)
@@ -150,14 +145,24 @@ void capture_loop(pcap_t* pd, int packets, pcap_handler func)
 
 void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetptr)
 {
-  //struct ip* iphdr;
-  //uint8_t* mypoint;
-  //iphdr = (struct ip*)packetptr;
+  struct ip* iphdr;
+
+  //printf("PTR: %p \n ", packetptr);
+  //fflush(stdout);
   //printf("Packet Incoming... ");
+
   packetptr += linkhdrlen;
 
 
-  CircBuf_Pkt_push(packetptr);
+  //uint8_t *packetptr_aux = (uint8_t *)malloc( ntohs(iphdr->ip_len) * sizeof(uint8_t));
+  uint8_t *packetptr_aux = (uint8_t *)malloc( packethdr->caplen * sizeof(uint8_t));
+  //printf("----------------------------------- Packetsize: %d %p\n",ntohs(iphdr->ip_len), packetptr_aux );
+  //fflush(stdout);
+  memcpy(packetptr_aux,packetptr, packethdr->caplen * sizeof(uint8_t));
+
+
+
+  CircBuf_Pkt_push(packetptr_aux);
   //printf("Packet pushed\n");
 
 }
@@ -174,8 +179,6 @@ void bailout(int signo)
         printf("%d packets dropped\n\n", stats.ps_drop);
     }
     pcap_breakloop(pd);
-    //CircBuf_Print(buf);
-    //send_Sample(buf.connections[0]);
     pcap_close(pd);
     exit(0);
 }
@@ -190,80 +193,12 @@ int sniffer()
         signal(SIGINT, bailout);
         signal(SIGTERM, bailout);
         signal(SIGQUIT, bailout);
-        //alarm(60);
-        //signal(SIGALRM,bailout);
-        //pcap_set_timeout(pd, 500);
+
         pcap_stats(pd, &stats);
         pcap_stats(pd, &curr_stats);
         capture_loop(pd, packets, (pcap_handler)myPacketParser);
 
-      //dumpear el buffer, a ver que contiene.
         bailout(0);
     }
     exit(0);
 }
-
-
-
-/*
-void parse_packet(u_char *user, struct pcap_pkthdr *packethdr,
-                  u_char *packetptr)
-{
-    struct ip* iphdr;
-    struct icmphdr* icmphdr;
-    struct tcphdr* tcphdr;
-    struct udphdr* udphdr;
-    char iphdrInfo[256], srcip[256], dstip[256];
-    unsigned short id, seq;
-
-    // Skip the datalink layer header and get the IP header fields.
-    packetptr += linkhdrlen;
-    iphdr = (struct ip*)packetptr;
-    strcpy(srcip, inet_ntoa(iphdr->ip_src));
-    strcpy(dstip, inet_ntoa(iphdr->ip_dst));
-    sprintf(iphdrInfo, "ID:%d TOS:0x%x, TTL:%d IpLen:%d DgLen:%d",
-            ntohs(iphdr->ip_id), iphdr->ip_tos, iphdr->ip_ttl,
-            4*iphdr->ip_hl, ntohs(iphdr->ip_len));
-
-    // Advance to the transport layer header then parse and display
-    // the fields based on the type of hearder: tcp, udp or icmp.
-    packetptr += 4*iphdr->ip_hl;
-    switch (iphdr->ip_p)
-    {
-    case IPPROTO_TCP:
-        tcphdr = (struct tcphdr*)packetptr;
-        printf("TCP  %s:%d -> %s:%d\n", srcip, ntohs(tcphdr->source),
-               dstip, ntohs(tcphdr->dest));
-        printf("%s\n", iphdrInfo);
-        printf("%c%c%c%c%c%c Seq: 0x%x Ack: 0x%x Win: 0x%x TcpLen: %d\n",
-               (tcphdr->urg ? 'U' : '*'),
-               (tcphdr->ack ? 'A' : '*'),
-               (tcphdr->psh ? 'P' : '*'),
-               (tcphdr->rst ? 'R' : '*'),
-               (tcphdr->syn ? 'S' : '*'),
-               (tcphdr->fin ? 'F' : '*'),
-               ntohl(tcphdr->seq), ntohl(tcphdr->ack_seq),
-               ntohs(tcphdr->window), 4*tcphdr->doff);
-        break;
-
-    case IPPROTO_UDP:
-        udphdr = (struct udphdr*)packetptr;
-        printf("UDP  %s:%d -> %s:%d\n", srcip, ntohs(udphdr->source),
-               dstip, ntohs(udphdr->dest));
-        printf("%s\n", iphdrInfo);
-        break;
-
-    case IPPROTO_ICMP:
-        icmphdr = (struct icmphdr*)packetptr;
-        printf("ICMP %s -> %s\n", srcip, dstip);
-        printf("%s\n", iphdrInfo);
-        memcpy(&id, (u_char*)icmphdr+4, 2);
-        memcpy(&seq, (u_char*)icmphdr+6, 2);
-        printf("Type:%d Code:%d ID:%d Seq:%d\n", icmphdr->type, icmphdr->code,
-               ntohs(id), ntohs(seq));
-        break;
-    }
-    printf(
-        "+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n\n");
-}
-*/

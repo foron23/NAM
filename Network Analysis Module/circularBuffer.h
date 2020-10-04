@@ -6,18 +6,7 @@
 #define CIRCBUFSIZE 100
 #define MAXLEN 4096
 
-/*
-pthread_mutex_t pkt_lock;
-pthread_mutex_t flow_lock;
 
-pthread_cond_t pkt_ovr_cond;
-pthread_cond_t flow_ovr_cond;
-pthread_cond_t pkt_und_cond;
-pthread_cond_t flow_und_cond;
-
-int pkt_count;
-int flow_count;
-*/
 typedef struct CircBuf_Flow
 {
   int head;
@@ -31,14 +20,10 @@ typedef struct CircBuf_Pkt
   int head;
   int tail;
   int size;
-  //uint8_t packets[MAXLEN];
-  //https://www.eskimo.com/~scs/cclass/int/sx9b.html
   uint8_t* packets[MAXLEN];
 
 } CircBuf_Pkt;
 
-//CircBuf_Pkt pkt_buf;
-//CircBuf_Flow buf;
 
 void CircBuf_Init_Flow();
 void CircBuf_Init_Pkt();

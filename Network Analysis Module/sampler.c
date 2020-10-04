@@ -5,14 +5,10 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-//#include "globals.h"
-//#include "dataStructures.h"
-//#include "circularBuffer.h"
 #include "globals.h"
 #include "calculation.h"
 #include "sampler.h"
 
-//Parametros??
 int port;
 char* host;
 
@@ -21,7 +17,7 @@ int sampler()
 flow flowToSend;
 while(1)
 {
-  printf("Another sampler round \n");
+  //printf("Another sampler round \n");
   //printf("Getting Sample...");
   flowToSend = CircBuf_Flow_pop();
   //printf("Sample popped,\n");
@@ -52,13 +48,13 @@ void send_Sample(flow flowToSend)
   sample.http_resp_size = flowToSend.data.http_resp_size;
   sample.same_src_and_dst_ip_ct = flowToSend.data.same_src_and_dst_ip_ct;
   sample.same_src_ip_and_dst_pt_ct = flowToSend.data.same_src_ip_and_dst_pt_ct;
-/*
+
   printf("%d,%d,%d,%d,%f,%f,%d,%f,%d,%f,%f,%d,%d,%d\n",
     flowToSend.data.dst_numPackets, flowToSend.data.src_totalBytes, flowToSend.data.sttl, flowToSend.data.dttl,
     flowToSend.data.s_load, flowToSend.data.d_load, flowToSend.data.s_loss, flowToSend.data.s_inpkt,
     flowToSend.data.tcp_window, flowToSend.data.s_mean, flowToSend.data.d_mean, flowToSend.data.http_resp_size,
     flowToSend.data.same_src_and_dst_ip_ct, flowToSend.data.same_src_ip_and_dst_pt_ct);
-*/
+
 
   //Abrir comunicaciones socket udp con el programa ML y enviar sample
   SocketCommunication(sample);
@@ -98,9 +94,9 @@ int SocketCommunication(Sample sample)
       close(sd);
       exit(1);
     }
-    printf("--------------------------------------------------------------->Sent.\n");
+    printf("------------------------------------------------------------------------------>Sent.\n");
     //rbuf
-    /*
+
     if (recvfrom(sd, rbuf, sizeof(int), 0, (struct sockaddr *)
         &server, &server_len) < 0)
     {
@@ -109,8 +105,8 @@ int SocketCommunication(Sample sample)
       exit(1);
     }
     printf("Response received.\n");
-`*/
+
     close(sd);
-    //printf("%s\n",rbuf );
+    //printf("%d\n",atoi(rbuf) );
 return 0;
 }
