@@ -246,8 +246,9 @@ else
   printf("################## %p \n", packetptr_aux);
 #endif
 free(packetptr_aux);
-
-printf("Packet processed\n");
+#ifdef DEBUG
+  printf("Packet processed\n");
+#endif
 }
 return 0;
 }
