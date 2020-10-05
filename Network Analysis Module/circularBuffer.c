@@ -92,46 +92,50 @@ int CircBuf_Flow_push(flow newFlow, directional_info extra_info, struct timespec
   newFlow.data.d_load = 0.0;
   newFlow.data.s_mean = 0.0;
   newFlow.data.d_mean = 0.0;
-
-  sem_getvalue(&sem_flow_in, &value);
-  printf("***************FLOW*************** PUSH SEM IN VALUE: %d \n", value);
+  #ifdef DEBUG
+    sem_getvalue(&sem_flow_in, &value);
+    printf("***************FLOW*************** PUSH SEM IN VALUE: %d \n", value);
+  #endif
   sem_wait(&sem_flow_in);
   pthread_mutex_lock(&flow_lock);
-  //printf("flow mutex in push\n" );
 
-  //printf("%d\n", buf.tail );
+  #ifdef DEBUG
+    printf("Flow buffer tail: %d\n", buf.tail );
+  #endif
   buf.connections[buf.tail++] = newFlow;
-  //printf("flow buf tail %d\n", buf.tail );
 
-    //memcpy(&buf.connections[buf.tail++],&newFlow, sizeof(newFlow));
-    if (buf.tail == buf.size)
-    {
-      buf.tail = 0;
-    }
+  if (buf.tail == buf.size)
+  {
+    buf.tail = 0;
+  }
 
-    pthread_mutex_unlock(&flow_lock);
-    sem_post(&sem_flow_out);
+  pthread_mutex_unlock(&flow_lock);
+  sem_post(&sem_flow_out);
+  #ifdef DEBUG
     sem_getvalue(&sem_flow_out, &value);
     printf("***************FLOW*************** PUSH SEM OUT VALUE: %d \n", value);
-
+  #endif
 
     return buf.tail;
 }
-//flow Circbuf_pop(CircBuf buf)
+
+
 flow CircBuf_Flow_pop()
 {
   flow thisFlow;
   int value;
 
+  #ifdef DEBUG
+    sem_getvalue(&sem_flow_out, &value);
+    printf("***************FLOW*************** PUSH SEM OUT VALUE: %d \n", value);
+  #endif
 
-  sem_getvalue(&sem_flow_out, &value);
-  printf("***************FLOW*************** PUSH SEM OUT VALUE: %d \n", value);
   sem_wait(&sem_flow_out);
   pthread_mutex_lock(&flow_lock);
-  //printf("flow mutex in pop\n" );
-
+  #ifdef DEBUG
+    printf("flow buffer head: %d\n",buf.head  );
+  #endif
   thisFlow = buf.connections[buf.head++];
-  //printf("flow head %d\n",buf.head  );
 
   if (buf.head == buf.size)
   {
@@ -140,8 +144,10 @@ flow CircBuf_Flow_pop()
 
   sem_post(&sem_flow_in);
   pthread_mutex_unlock(&flow_lock);
-  sem_getvalue(&sem_flow_in, &value);
-  printf("***************FLOW*************** PUSH SEM IN VALUE: %d \n", value);
+  #ifdef DEBUG
+    sem_getvalue(&sem_flow_in, &value);
+    printf("***************FLOW*************** PUSH SEM IN VALUE: %d \n", value);
+  #endif
 
   return thisFlow;
 }
@@ -152,26 +158,29 @@ int CircBuf_Pkt_push(uint8_t *packetptr)
   struct ip* iphdr;
   iphdr = (struct ip*)packetptr;
   int value;
-
-  sem_getvalue(&sem_pkt_in, &value);
-  printf("***************PACKET*************** PUSH SEM IN VALUE: %d \n", value);
+  #ifdef DEBUG
+    sem_getvalue(&sem_pkt_in, &value);
+    printf("***************PACKET*************** PUSH SEM IN VALUE: %d \n", value);
+  #endif
   sem_wait(&sem_pkt_in);
   pthread_mutex_lock(&pkt_lock);
-  //printf("Mutex push in\n" );
-  //printf("INDEX IN: %d \n", pkt_buf.tail);
+  #ifdef DEBUG
+    printf("Packet buffer tail: %d \n", pkt_buf.tail);
+  #endif
+
   pkt_buf.packets[pkt_buf.tail++] = packetptr;
-    if (pkt_buf.tail == pkt_buf.size)
-    {
-      pkt_buf.tail = 0;
-    }
+  if (pkt_buf.tail == pkt_buf.size)
+  {
+    pkt_buf.tail = 0;
+  }
 
   pthread_mutex_unlock(&pkt_lock);
   sem_post(&sem_pkt_out);
-  //printf("Mutex push out\n" );
-  sem_getvalue(&sem_pkt_out, &value);
-  printf("***************PACKET*************** PUSH SEM OUT VALUE: %d \n", value);
-
-    return pkt_buf.tail;
+  #ifdef DEBUG
+    sem_getvalue(&sem_pkt_out, &value);
+    printf("***************PACKET*************** PUSH SEM OUT VALUE: %d \n", value);
+  #endif
+  return pkt_buf.tail;
 }
 
 uint8_t* CircBuf_Pkt_pop()
@@ -179,18 +188,16 @@ uint8_t* CircBuf_Pkt_pop()
   uint8_t *packetptr;
 
   int value;
-
-  sem_getvalue(&sem_pkt_out, &value);
-  printf("***************PACKET*************** POP SEM OUT VALUE: %d \n", value);
-
+  #ifdef DEBUG
+    sem_getvalue(&sem_pkt_out, &value);
+    printf("***************PACKET*************** POP SEM OUT VALUE: %d \n", value);
+  #endif
   sem_wait(&sem_pkt_out);
   pthread_mutex_lock(&pkt_lock);
-  //printf("Mutex pop in\n" );
-//Creo que el problema de los pop proviene de la asignacion de memoria hecha aqui.
-  //memcpy(&packetptr,&pkt_buf.packets[pkt_buf.head], sizeof(pkt_buf.packets[pkt_buf.head]));
-  //printf("INDEX OUT: %d \n", pkt_buf.head);
+  #ifdef DEBUG
+    printf("Packet buffer head: %d \n", pkt_buf.head);
+  #endif
   packetptr = pkt_buf.packets[pkt_buf.head++];
-  //pkt_buf.head++;
 
   if (pkt_buf.head == pkt_buf.size)
   {
@@ -199,15 +206,15 @@ uint8_t* CircBuf_Pkt_pop()
 
   pthread_mutex_unlock(&pkt_lock);
   sem_post(&sem_pkt_in);
-  //printf("Mutex pop out%p\n", packetptr);
-  sem_getvalue(&sem_pkt_in, &value);
-  printf("***************PACKET*************** POP SEM IN VALUE: %d \n", value);
-
+  #ifdef DEBUG
+    sem_getvalue(&sem_pkt_in, &value);
+    printf("***************PACKET*************** POP SEM IN VALUE: %d \n", value);
+  #endif
 
   return packetptr;
 }
 
-int CircBuf_Print()
+int CircBuf_Flow_Print()
 {
   flow sample;
     for(int i=0; i< buf.size; i++)
@@ -219,18 +226,10 @@ int CircBuf_Print()
           return(-1);
         sample = buf.connections[i];
         sample = Calculate_Features(sample);
-        //send_Sample(sample);
 
 
       }
-    /*
-    printf("%d,%d,%d,%d,%f,%f,%d,%f,%d,%f,%f,%d,%d,%d\n",
-      sample.data.dst_numPackets, sample.data.src_totalBytes, sample.data.sttl, sample.data.dttl,
-      sample.data.s_load, sample.data.d_load, sample.data.s_loss, sample.data.s_inpkt,
-      sample.data.tcp_window, sample.data.s_mean, sample.data.d_mean, sample.data.http_resp_size,
-      sample.data.same_src_and_dst_ip_ct, sample.data.same_src_ip_and_dst_pt_ct);
-    send_Sample(sample);
-    */
+
     printf("\n");
     return(0);
 }

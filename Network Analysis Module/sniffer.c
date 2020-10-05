@@ -49,7 +49,6 @@
 pcap_t* pd;
 int linkhdrlen;
 struct pcap_stat curr_stats, stats;
-//int debug;
 
 int packets;
 char interface[256], bpfstr[256];
@@ -147,24 +146,25 @@ void myPacketParser(u_char *user, struct pcap_pkthdr *packethdr, u_char *packetp
 {
   struct ip* iphdr;
 
-  //printf("PTR: %p \n ", packetptr);
-  //fflush(stdout);
-  //printf("Packet Incoming... ");
+#ifdef DEBUG
+  printf("PTR: %p \n ", packetptr);
+  fflush(stdout);
+  printf("Packet Incoming...\n");
+#endif
 
   packetptr += linkhdrlen;
 
 
-  //uint8_t *packetptr_aux = (uint8_t *)malloc( ntohs(iphdr->ip_len) * sizeof(uint8_t));
   uint8_t *packetptr_aux = (uint8_t *)malloc( packethdr->caplen * sizeof(uint8_t));
-  //printf("----------------------------------- Packetsize: %d %p\n",ntohs(iphdr->ip_len), packetptr_aux );
-  //fflush(stdout);
   memcpy(packetptr_aux,packetptr, packethdr->caplen * sizeof(uint8_t));
 
 
 
   CircBuf_Pkt_push(packetptr_aux);
-  //printf("Packet pushed\n");
 
+#ifdef DEBUG
+  printf("Packet pushed\n");
+#endif
 }
 
 

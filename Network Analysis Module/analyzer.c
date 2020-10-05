@@ -132,14 +132,17 @@ int PacketAnalyzer()
 while(1)
 {
 
-
-//printf("Another analyzer round \n");
-//printf("Get the packet...\n");
+#ifdef DEBUG
+  printf("Another analyzer round \n");
+  printf("Get the packet...\n");
+#endif
 
 packetptr = CircBuf_Pkt_pop();
 packetptr_aux = packetptr;
 
-//printf("Packet popped... %p \n", packetptr);
+#ifdef DEBUG
+  printf("Packet popped... %p \n", packetptr);
+#endif
 
 // Skip the datalink layer header and get the IP header fields.
 clock_gettime(CLOCK_REALTIME,&timestamp);
@@ -208,34 +211,40 @@ ind = fetch_flow( thisFlow);
 
 if(ind==FLOW_NOT_FOUND)
 {
-//printf("Pushing a new flow..." );
   id =  CircBuf_Flow_push(thisFlow, extra_info, timestamp);
 
-//printf("Flow pushed.\n" );
+
+  #ifdef DEBUG
+    printf("Flow pushed.\n" );
+  #endif
 
 }
 else
 {
-    //printf("fetched %d\n", ind);
+  #ifdef DEBUG
+    printf("fetched %d\n", ind);
+  #endif
 
   if(isReversed(buf.connections[ind], thisFlow))
   {
 
-    //printf(" updating dst->src\n" );
 
     updateFlow_dst( thisFlow,  extra_info ,ind, timestamp);
-    //printf("updated dst->src\n" );
-
+    #ifdef DEBUG
+      printf("updated dst->src\n" );
+    #endif
   }
   else
   {
-    //printf(" updating src->dst\n" );
     updateFlow_src( thisFlow,  extra_info ,ind, timestamp);
-    //printf("updated src->dst\n" );
-
+    #ifdef DEBUG
+      printf("updated src->dst\n" );
+    #endif
   }
 }
-//printf("################## %p \n", packetptr_aux);
+#ifdef DEBUG
+  printf("################## %p \n", packetptr_aux);
+#endif
 free(packetptr_aux);
 
 printf("Packet processed\n");

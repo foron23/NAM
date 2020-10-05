@@ -17,12 +17,20 @@ int sampler()
 flow flowToSend;
 while(1)
 {
-  //printf("Another sampler round \n");
-  //printf("Getting Sample...");
+
+  #ifdef DEBUG
+    printf("Another sampler round \n");
+    printf("Getting Sample...\n");
+  #endif
   flowToSend = CircBuf_Flow_pop();
-  //printf("Sample popped,\n");
+  #ifdef DEBUG
+    printf("Sample popped.\n");
+  #endif
   flowToSend = Calculate_Features(flowToSend);
-  //printf("Sending Sample\n");
+
+  #ifdef DEBUG
+    printf("Sending Sample\n");
+  #endif
   send_Sample(flowToSend);
 }
   return 0;
@@ -49,12 +57,14 @@ void send_Sample(flow flowToSend)
   sample.same_src_and_dst_ip_ct = flowToSend.data.same_src_and_dst_ip_ct;
   sample.same_src_ip_and_dst_pt_ct = flowToSend.data.same_src_ip_and_dst_pt_ct;
 
-  printf("%d,%d,%d,%d,%f,%f,%d,%f,%d,%f,%f,%d,%d,%d\n",
-    flowToSend.data.dst_numPackets, flowToSend.data.src_totalBytes, flowToSend.data.sttl, flowToSend.data.dttl,
-    flowToSend.data.s_load, flowToSend.data.d_load, flowToSend.data.s_loss, flowToSend.data.s_inpkt,
-    flowToSend.data.tcp_window, flowToSend.data.s_mean, flowToSend.data.d_mean, flowToSend.data.http_resp_size,
-    flowToSend.data.same_src_and_dst_ip_ct, flowToSend.data.same_src_ip_and_dst_pt_ct);
 
+  #ifdef DEBUG
+    printf("%d,%d,%d,%d,%f,%f,%d,%f,%d,%f,%f,%d,%d,%d\n",
+      flowToSend.data.dst_numPackets, flowToSend.data.src_totalBytes, flowToSend.data.sttl, flowToSend.data.dttl,
+      flowToSend.data.s_load, flowToSend.data.d_load, flowToSend.data.s_loss, flowToSend.data.s_inpkt,
+      flowToSend.data.tcp_window, flowToSend.data.s_mean, flowToSend.data.d_mean, flowToSend.data.http_resp_size,
+      flowToSend.data.same_src_and_dst_ip_ct, flowToSend.data.same_src_ip_and_dst_pt_ct);
+  #endif
 
   //Abrir comunicaciones socket udp con el programa ML y enviar sample
   SocketCommunication(sample);
@@ -67,8 +77,11 @@ int SocketCommunication(Sample sample)
   struct  hostent         *hp;
 
   int sd, server_len;
-  //printf("this is host %s port %d\n",host, port );
+  #ifdef DEBUG
+    printf("this is host %s port %d\n",host, port );
+  #endif
   char rbuf[MAXLEN], sbuf[MAXLEN];
+
   //Create socket
   if ( (sd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 )
   {
@@ -78,7 +91,6 @@ int SocketCommunication(Sample sample)
   bzero((char *)&server, sizeof(server));
     server.sin_family = AF_INET;
     server.sin_port = htons(port);
-    //server.sin_port = port;
 
     if ((hp = gethostbyname(host)) == NULL) {
         fprintf(stderr, "Can't get server's IP address\n");

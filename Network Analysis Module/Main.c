@@ -1,4 +1,3 @@
-//#include <pthread.h>
 #include <stdio.h>
 #include <pcap.h>
 #include <string.h>
@@ -33,11 +32,7 @@ return NULL;
 void *analyzer_handler(void *analyzeTh)
 {
 printf("Initializing analyzer thread \n");
-//while(1)
-//{
-//  printf("Another analyzer round \n");
-  PacketAnalyzer();
-//}
+PacketAnalyzer();
 /* the function must return something - NULL will do */
 return NULL;
 
@@ -46,10 +41,8 @@ return NULL;
 void *sampler_handler(void *samplerTh)
 {
 printf("Initializing sampler thread \n");
-//while(1)
-//{
-  sampler();
-//}
+sampler();
+
 /* the function must return something - NULL will do */
 return NULL;
 
@@ -57,18 +50,14 @@ return NULL;
 
 int main(int argc, char **argv)
 {
-/*
-int debug = 0;
-int packets = 0, c, i;
-char interface[256] = "", bpfstr[256] = "";
-*/
+
 // Get the command line options, if any
-while ((c = getopt (argc, argv, "hi:n:p:m:d")) != -1)
+while ((c = getopt (argc, argv, "hi:n:p:m")) != -1)
 {
     switch (c)
     {
     case 'h':
-        printf("usage: %s [-h] [-i ] [-n ] [-p ] [-m ] [-d] []\n", argv[0]);
+        printf("usage: %s [-h] [-i ] [-n ] [-p ] [-m ] []\n", argv[0]);
         exit(0);
         break;
     case 'i':
@@ -84,9 +73,7 @@ while ((c = getopt (argc, argv, "hi:n:p:m:d")) != -1)
         //strcpy(host, optarg);
         memcpy(&host,&optarg, sizeof(host));
         break;
-    case 'd':
-        debug = 1;
-        break;
+
 
     }
 }
