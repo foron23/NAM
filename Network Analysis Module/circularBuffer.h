@@ -31,5 +31,5 @@ int CircBuf_Flow_push(flow newFlow, directional_info extra_info, struct timespec
 flow CircBuf_Flow_pop();
 int CircBuf_Pkt_push(uint8_t *packetptr);
 uint8_t* CircBuf_Pkt_pop();
-int CircBuf_Print();
+int CircBuf_Flow_Print();
 void CircBuf_Finish();
